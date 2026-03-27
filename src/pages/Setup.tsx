@@ -38,18 +38,25 @@ export function SetupPage() {
       // Fetch and store all data
       const allData = await service.fetchAllData();
       StorageService.setWaniKaniToken(normalizedToken);
-      StorageService.setWaniKaniData(allData);
+      await StorageService.setWaniKaniData(allData);
 
       setError('');
-      setTimeout(() => {
-        navigate('/');
-      }, 1500);
+      navigate('/', { replace: true });
     } catch (err) {
       setError('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
     }
   };
+
+  const handleDisconnect = async () => {
+    StorageService.clearWaniKaniToken();
+    await StorageService.clearWaniKaniData();
+    setUserData(null);
+    setToken('');
+    setError('');
+  };  
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 flex flex-col items-center justify-center p-4">
@@ -70,6 +77,12 @@ export function SetupPage() {
               <p className="text-sm text-green-700">
                 Level {userData.level} • {userData.username}
               </p>
+              <button
+                onClick={handleDisconnect}
+                className="mt-3 w-full px-3 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors"
+              >
+                Disconnect
+              </button>
             </div>
           )}
 

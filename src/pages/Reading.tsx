@@ -2,14 +2,138 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { passages } from '../data/passages';
 import { useSession } from '../hooks/useSession';
+import { StorageService } from '../services/storage';
+import { ReadingPassage, WaniKaniData } from '../types';
+import { getMatchingVocabularyTokens } from '../lib/passageMatching';
+
+type HighlightKind = 'kanji' | 'vocab' | 'none';
+
+type HighlightSets = {
+  kanji: Set<string>;
+  vocab: Set<string>;
+};
+
+const BLUE_HIGHLIGHT = 'text-blue-700 bg-blue-100 rounded px-0.5';
+const GREEN_HIGHLIGHT = 'text-green-700 bg-green-100 rounded px-0.5';
+
+function buildHighlightSets(passage: ReadingPassage, data: WaniKaniData | null): HighlightSets {
+  if (!data) {
+    return { kanji: new Set(), vocab: new Set() };
+  }
+
+  const wkKanji = new Set<string>();
+  const wkVocab = new Set<string>();
+
+  data.assignments.forEach((assignment) => {
+    const subject = data.subjects.get(assignment.data.subject_id);
+    if (!subject) return;
+
+    if (subject.type === 'kanji' && subject.data.characters) {
+      wkKanji.add(subject.data.characters);
+      return;
+    }
+
+    if ((subject.type === 'vocabulary' || subject.type === 'kana_vocabulary')) {
+      const token = subject.data.characters ?? subject.data.slug;
+      if (token) {
+        wkVocab.add(token);
+      }
+    }
+  });
+
+  return {
+    kanji: new Set(passage.kanjiList.filter((kanji) => wkKanji.has(kanji))),
+    vocab: getMatchingVocabularyTokens(passage.text, wkVocab),
+  };
+}
+
+function getTokenKind(token: string, sets: HighlightSets): HighlightKind {
+  if (sets.vocab.has(token)) return 'vocab';
+  if (sets.kanji.has(token)) return 'kanji';
+  return 'none';
+}
+
+function getTokenClass(kind: HighlightKind): string {
+  if (kind === 'vocab') return GREEN_HIGHLIGHT;
+  if (kind === 'kanji') return BLUE_HIGHLIGHT;
+  return '';
+}
+
+function renderParagraphWithHighlights(
+  paragraph: string,
+  showHighlights: boolean,
+  sets: HighlightSets
+): Array<string | JSX.Element> {
+  if (!showHighlights) {
+    return [paragraph];
+  }
+
+  const nodes: Array<string | JSX.Element> = [];
+  const vocabTokens = Array.from(sets.vocab).sort((a, b) => b.length - a.length);
+
+  let index = 0;
+  let keyIndex = 0;
+
+  while (index < paragraph.length) {
+    const vocabMatch = vocabTokens.find((token) => paragraph.startsWith(token, index));
+    if (vocabMatch) {
+      nodes.push(
+        <span key={`vocab-${keyIndex++}`} className={GREEN_HIGHLIGHT}>
+          {vocabMatch}
+        </span>
+      );
+      index += vocabMatch.length;
+      continue;
+    }
+
+    const char = paragraph[index];
+    if (sets.kanji.has(char)) {
+      nodes.push(
+        <span key={`kanji-${keyIndex++}`} className={BLUE_HIGHLIGHT}>
+          {char}
+        </span>
+      );
+    } else {
+      nodes.push(char);
+    }
+
+    index += 1;
+  }
+
+  return nodes;
+}
 
 export function ReadingPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { session, startSession, startTimer, resetSession } = useSession();
   const [timeElapsed, setTimeElapsed] = useState(0);
+  const [showHighlights, setShowHighlights] = useState(true);
+  const [highlightSets, setHighlightSets] = useState<HighlightSets>({
+    kanji: new Set(),
+    vocab: new Set(),
+  });
 
   const passage = passages.find((p) => p.id === id);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadHighlights = async () => {
+      if (!passage) return;
+
+      const wkData = await StorageService.getWaniKaniData();
+      if (!active) return;
+
+      setHighlightSets(buildHighlightSets(passage, wkData));
+    };
+
+    void loadHighlights();
+
+    return () => {
+      active = false;
+    };
+  }, [passage]);
 
   useEffect(() => {
     if (!passage) {
@@ -62,6 +186,12 @@ export function ReadingPage() {
         </button>
         <div className="flex items-center gap-4">
           <button
+            onClick={() => setShowHighlights((prev) => !prev)}
+            className="btn btn-secondary text-sm"
+          >
+            {showHighlights ? 'Hide Highlights' : 'Show Highlights'}
+          </button>
+          <button
             onClick={startTimer}
             className="btn btn-secondary text-sm"
           >
@@ -98,7 +228,11 @@ export function ReadingPage() {
           <div className="japanese-text text-gray-800 leading-loose">
             {passage.text.split('\n\n').map((paragraph, idx) => (
               <p key={idx} className="mb-6">
-                {paragraph}
+                {renderParagraphWithHighlights(
+                  paragraph,
+                  showHighlights,
+                  highlightSets
+                )}
               </p>
             ))}
           </div>

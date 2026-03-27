@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { StorageService } from './services/storage';
+import { NavBar } from './components/NavBar';
 import { SetupPage } from './pages/Setup';
 import { HomePage } from './pages/Home';
+import { TextsPage } from './pages/Texts';
+import { KanjiPage } from './pages/Kanji';
+import { VocabularyPage } from './pages/Vocabulary';
+import { UserPage } from './pages/User';
 import { ReadingPage } from './pages/Reading';
 import { QuestionsPage } from './pages/Questions';
 import { ResultsPage } from './pages/Results';
@@ -10,14 +15,15 @@ import { HistoryPage } from './pages/History';
 import './index.css';
 
 function App() {
-  const [isSetup, setIsSetup] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isSetup, setIsSetup] = useState(() => !!StorageService.getWaniKaniToken());
 
   useEffect(() => {
-    // Check if WaniKani token exists
-    const token = StorageService.getWaniKaniToken();
-    setIsSetup(!!token);
     setLoading(false);
+
+    return StorageService.subscribeToAuthChange(() => {
+      setIsSetup(!!StorageService.getWaniKaniToken());
+    });
   }, []);
 
   if (loading) {
@@ -33,16 +39,21 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-gray-50">
+      <div className={`min-h-screen bg-gray-50 ${isSetup ? 'pb-20 md:pb-0' : ''}`}>
+        {isSetup && <NavBar />}
         <Routes>
           {isSetup ? (
             <>
               <Route path="/" element={<HomePage />} />
+              <Route path="/texts" element={<TextsPage />} />
+              <Route path="/kanji" element={<KanjiPage />} />
+              <Route path="/vocabulary" element={<VocabularyPage />} />
+              <Route path="/user" element={<UserPage />} />
               <Route path="/reading/:id" element={<ReadingPage />} />
               <Route path="/questions/:id" element={<QuestionsPage />} />
               <Route path="/results/:id" element={<ResultsPage />} />
               <Route path="/history" element={<HistoryPage />} />
-              <Route path="/setup" element={<SetupPage />} />
+              <Route path="/setup" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>
           ) : (

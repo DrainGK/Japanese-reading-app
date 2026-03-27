@@ -1,6 +1,17 @@
 import { KnowledgeModel, WaniKaniData, ReadingPassage } from '../types';
 
+const KANJI_CHAR_REGEX = /[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF々]/g;
+
+function extractKanjiChars(text: string): string[] {
+  return Array.from(new Set(text.match(KANJI_CHAR_REGEX) ?? []));
+}
+
+function getPassageSource(passage: ReadingPassage): 'local' | 'aozora' {
+  return passage.source ?? 'local';
+}
+
 export function buildKnowledgeModel(waniKaniData: WaniKaniData): KnowledgeModel {
+  const unlockedKanji = new Set<string>();
   const knownKanji = new Set<string>();
   const knownVocab = new Set<string>();
   const weakItems = new Set<string>();
@@ -29,6 +40,10 @@ export function buildKnowledgeModel(waniKaniData: WaniKaniData): KnowledgeModel 
       : 0;
 
     // Categorize based on SRS stage
+    if (subject.type === 'kanji' && assignment.data.unlocked_at) {
+      unlockedKanji.add(characters);
+    }
+
     if (srsStage >= 5) {
       // Guru and above = known
       if (subject.type === 'kanji') {
@@ -76,11 +91,18 @@ export function buildKnowledgeModel(waniKaniData: WaniKaniData): KnowledgeModel 
 
   return {
     level: waniKaniData.user?.level || 1,
+    unlockedKanji,
     knownKanji,
     knownVocab,
     weakItems,
     recentItems,
   };
+}
+
+export interface RecommendationFilters {
+  theme?: ReadingPassage['theme'] | 'all';
+  source?: 'local' | 'aozora' | 'all';
+  requireUnlockedMatch?: boolean;
 }
 
 export interface PassageScore {
@@ -181,18 +203,68 @@ export function scorePassage(
 export function recommendPassage(
   passages: ReadingPassage[],
   knowledge: KnowledgeModel,
-  completedIds: Set<string>
+  completedIds: Set<string>,
+  filters?: RecommendationFilters
 ): ReadingPassage | null {
-  const scores = passages
+  const baseFiltered = passages.filter((passage) => {
+    if (filters?.theme && filters.theme !== 'all' && passage.theme !== filters.theme) {
+      return false;
+    }
+
+    if (filters?.source && filters.source !== 'all' && getPassageSource(passage) !== filters.source) {
+      return false;
+    }
+
+    if (!filters?.requireUnlockedMatch) {
+      return true;
+    }
+
+    if (knowledge.unlockedKanji.size === 0) {
+      return true;
+    }
+
+    const passageKanji = extractKanjiChars(passage.text);
+    if (passageKanji.length === 0) {
+      return true;
+    }
+
+    const unlockedOverlap = passageKanji.filter((k) => knowledge.unlockedKanji.has(k)).length;
+    return unlockedOverlap > 0;
+  });
+
+  const incompleteAndMatched = baseFiltered.filter((passage) => !completedIds.has(passage.id));
+  const candidatePool = incompleteAndMatched.length > 0 ? incompleteAndMatched : baseFiltered;
+
+  if (candidatePool.length === 0) {
+    // Final fallback: honor only metadata filters and ignore unlocked-kanji restriction.
+    const metadataOnly = passages.filter((passage) => {
+      if (filters?.theme && filters.theme !== 'all' && passage.theme !== filters.theme) {
+        return false;
+      }
+
+      if (filters?.source && filters.source !== 'all' && getPassageSource(passage) !== filters.source) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const incompleteMetadataOnly = metadataOnly.filter((passage) => !completedIds.has(passage.id));
+    const metadataPool = incompleteMetadataOnly.length > 0 ? incompleteMetadataOnly : metadataOnly;
+    return metadataPool[0] ?? null;
+  }
+
+  const scores = candidatePool
     .map((p) => scorePassage(p, knowledge, completedIds))
     .filter((s): s is PassageScore => s !== null)
     .sort((a, b) => b.score - a.score);
 
-  if (scores.length === 0) {
-    return null;
+  if (scores.length > 0) {
+    return scores[0].passage;
   }
 
-  return scores[0].passage;
+  // Fallback: return first candidate even when strict score threshold rejects all.
+  return candidatePool[0] ?? null;
 }
 
 export function getPassageScoreReason(score: PassageScore): string {

@@ -3,6 +3,26 @@ import { ReadingSession, ReadingPassage } from '../types';
 import { StorageService } from '../services/storage';
 import { generateSessionId } from '../lib/utils';
 
+const ACTIVE_SESSION_STORAGE_KEY = 'active_reading_session_state';
+
+function loadPersistedSession(): SessionState {
+  try {
+    const stored = localStorage.getItem(ACTIVE_SESSION_STORAGE_KEY);
+    if (!stored) return initialState;
+    return { ...initialState, ...JSON.parse(stored) };
+  } catch {
+    return initialState;
+  }
+}
+
+function persistSession(session: SessionState): void {
+  try {
+    localStorage.setItem(ACTIVE_SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    // Ignore storage write failures for transient session state.
+  }
+}
+
 export interface SessionState {
   passageId: string | null;
   passage: ReadingPassage | null;
@@ -24,12 +44,16 @@ const initialState: SessionState = {
 };
 
 export function useSession() {
-  const [session, setSession] = useState<SessionState>(initialState);
+  const [session, setSession] = useState<SessionState>(() => loadPersistedSession());
   const [sessionId, setSessionId] = useState<string>('');
 
   useEffect(() => {
     setSessionId(generateSessionId());
   }, []);
+
+  useEffect(() => {
+    persistSession(session);
+  }, [session]);
 
   const startSession = useCallback((passage: ReadingPassage) => {
     setSession({
@@ -111,6 +135,7 @@ export function useSession() {
   const resetSession = useCallback(() => {
     setSession(initialState);
     StorageService.clearCurrentSession();
+    localStorage.removeItem(ACTIVE_SESSION_STORAGE_KEY);
     setSessionId(generateSessionId());
   }, []);
 

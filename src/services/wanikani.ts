@@ -6,13 +6,23 @@ import {
   WaniKaniData,
 } from '../types';
 
-const RAW_API_BASE = import.meta.env.VITE_WANIKANI_API_BASE ?? 'https://api.wanikani.com';
-const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
+// Follow WaniKani's recommended pattern: https://api.wanikani.com/v2/<endpoint>
+const RAW_API_BASE = import.meta.env.VITE_WANIKANI_API_BASE ?? 'https://api.wanikani.com/v2';
+const NORMALIZED_BASE = RAW_API_BASE.replace(/\/+$/, '');
+const API_BASE = /\/v2$/.test(NORMALIZED_BASE) ? NORMALIZED_BASE : `${NORMALIZED_BASE}/v2`;
 
 type APIResponse<T> = { data: T; pages: { next_url: string | null } };
 type AssignmentsResponse = APIResponse<WaniKaniAssignment[]>;
 type ReviewsResponse = APIResponse<WaniKaniReview[]>;
-type SubjectsResponse = { data: WaniKaniSubject[] };
+type SubjectsResponse = APIResponse<WaniKaniSubject[]>;
+
+function normalizeSubject(subject: WaniKaniSubject): WaniKaniSubject {
+  const subjectType = subject.type ?? subject.object;
+  return {
+    ...subject,
+    type: subjectType,
+  };
+}
 
 export class WaniKaniService {
   private apiToken: string;
@@ -22,8 +32,17 @@ export class WaniKaniService {
   }
 
   private async fetchFromAPI<T>(endpoint: string): Promise<T> {
-    const normalizedEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE}${normalizedEndpoint}`;
+    // Allow absolute URLs (WaniKani next_url provides full URLs) or relative endpoints.
+    if (!endpoint) {
+      throw new Error('WaniKani API endpoint is required');
+    }
+
+    const trimmed = endpoint.trim();
+
+    // Absolute URLs (e.g., next_url) pass through untouched.
+    const url = trimmed.startsWith('http')
+      ? trimmed
+      : `${API_BASE}/${trimmed.replace(/^\/+/, '')}`;
     const response = await fetch(url, {
       headers: {
         Authorization: `Bearer ${this.apiToken}`,
@@ -33,9 +52,17 @@ export class WaniKaniService {
 
     if (!response.ok) {
       const errorBody = await response.text();
+
       if (response.status === 401) {
-        throw new Error('Invalid WaniKani API token');
+        throw new Error('Invalid or expired WaniKani API token (401).');
       }
+
+      if (response.status === 404) {
+        throw new Error(
+          `WaniKani API endpoint not found (404): ${url}. Check that the path exists, e.g., "/user", "/assignments", "/reviews". Response: ${errorBody}`
+        );
+      }
+
       throw new Error(
         `WaniKani API error ${response.status} ${response.statusText} at ${url}. Response: ${errorBody}`
       );
@@ -46,19 +73,17 @@ export class WaniKaniService {
   }
 
   async getUser(): Promise<WaniKaniUser> {
-    const userResp = await this.fetchFromAPI<{ data: WaniKaniUser }>('/v2/user');
+    const userResp = await this.fetchFromAPI<{ data: WaniKaniUser }>('/user');
     return (userResp as any).data;
   }
 
   async getAllAssignments(): Promise<WaniKaniAssignment[]> {
     const allAssignments: WaniKaniAssignment[] = [];
-    let nextUrl: string | null = '/v2/assignments';
-    const params = new URLSearchParams();
-    params.set('unlocked_dates[exists]', 'true');
+    let nextUrl: string | null = '/assignments';
 
     while (nextUrl) {
       const assignResp: AssignmentsResponse = await this.fetchFromAPI<AssignmentsResponse>(
-        nextUrl.includes('?') ? nextUrl : `${nextUrl}?${params}`
+        nextUrl
       );
 
       allAssignments.push(...assignResp.data);
@@ -77,20 +102,36 @@ export class WaniKaniService {
       const idString = batch.join(',');
 
       const subjResp: SubjectsResponse = await this.fetchFromAPI<SubjectsResponse>(
-        `/v2/subjects?ids=${idString}`
+        `/subjects?ids=${idString}`
       );
 
       subjResp.data.forEach((subject) => {
-        subjectMap.set(subject.id, subject);
+        const normalizedSubject = normalizeSubject(subject);
+        subjectMap.set(normalizedSubject.id, normalizedSubject);
       });
     }
 
     return subjectMap;
   }
 
+  async getAllSubjectsByType(
+    subjectType: 'kanji' | 'vocabulary' | 'kana_vocabulary'
+  ): Promise<WaniKaniSubject[]> {
+    const allSubjects: WaniKaniSubject[] = [];
+    let nextUrl: string | null = `/subjects?types=${subjectType}`;
+
+    while (nextUrl) {
+      const subjResp: SubjectsResponse = await this.fetchFromAPI<SubjectsResponse>(nextUrl);
+      allSubjects.push(...subjResp.data.map(normalizeSubject));
+      nextUrl = subjResp.pages.next_url || null;
+    }
+
+    return allSubjects;
+  }
+
   async getReviews(): Promise<WaniKaniReview[]> {
     const allReviews: WaniKaniReview[] = [];
-    let nextUrl: string | null = '/v2/reviews';
+    let nextUrl: string | null = '/reviews';
 
     while (nextUrl) {
       const revResp: ReviewsResponse = await this.fetchFromAPI<ReviewsResponse>(nextUrl);
@@ -104,19 +145,69 @@ export class WaniKaniService {
 
   async fetchAllData(): Promise<WaniKaniData> {
     try {
-      const user = await this.getUser();
-      const assignments = await this.getAllAssignments();
-      const reviews = await this.getReviews();
+      const [user, assignments, reviews, kanjiSubjects, vocabularySubjects, kanaVocabularySubjects] =
+        await Promise.all([
+          this.getUser(),
+          this.getAllAssignments(),
+          this.getReviews(),
+          this.getAllSubjectsByType('kanji'),
+          this.getAllSubjectsByType('vocabulary'),
+          this.getAllSubjectsByType('kana_vocabulary'),
+        ]);
 
       const subjectIds = Array.from(
         new Set(assignments.map((a) => a.data.subject_id))
       );
 
-      const subjects = await this.getSubjects(subjectIds);
+      const assignmentSubjects = await this.getSubjects(subjectIds);
+      const subjects = new Map<number, WaniKaniSubject>();
+
+      assignmentSubjects.forEach((subject) => {
+        subjects.set(subject.id, subject);
+      });
+      kanjiSubjects.forEach((subject) => {
+        subjects.set(subject.id, subject);
+      });
+      vocabularySubjects.forEach((subject) => {
+        subjects.set(subject.id, subject);
+      });
+      kanaVocabularySubjects.forEach((subject) => {
+        subjects.set(subject.id, subject);
+      });
+
+      const subjectTypeCounts = {
+        radical: 0,
+        kanji: 0,
+        vocabulary: 0,
+        kana_vocabulary: 0,
+      };
+
+      subjects.forEach((subject) => {
+        if (subject.type in subjectTypeCounts) {
+          subjectTypeCounts[subject.type] += 1;
+        }
+      });
+
+      console.log('[WaniKani] fetch summary', {
+        user: user.username,
+        level: user.level,
+        assignments: assignments.length,
+        reviews: reviews.length,
+        subjects: subjects.size,
+        subjectTypes: subjectTypeCounts,
+      });
+      console.log('[WaniKani] sample assignments', assignments.slice(100, 105));
+      console.log('[WaniKani] sample reviews', reviews.slice(0, 5));
+      console.log('[WaniKani] sample kanji', kanjiSubjects.slice(0, 5));
+      console.log('[WaniKani] sample vocabulary', vocabularySubjects.slice(0, 5));
+      console.log('[WaniKani] sample kana_vocabulary', kanaVocabularySubjects.slice(0, 5));
 
       return {
         user,
         assignments,
+        kanjiSubjects,
+        vocabularySubjects,
+        kanaVocabularySubjects,
         subjects,
         reviews,
         fetchedAt: Date.now(),

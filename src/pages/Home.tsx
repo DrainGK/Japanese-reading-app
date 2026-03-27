@@ -19,17 +19,23 @@ export function HomePage() {
       try {
         const token = StorageService.getWaniKaniToken();
         if (!token) {
-          navigate('/setup');
+          setLoading(false);
           return;
         }
 
         // Get WaniKani data
-        let wkData = StorageService.getWaniKaniData();
+        let wkData = await StorageService.getWaniKaniData();
         if (!wkData) {
-          // Fetch if not cached
-          const service = new WaniKaniService(token);
-          wkData = await service.fetchAllData();
-          StorageService.setWaniKaniData(wkData);
+          // Try to refetch if not cached
+          try {
+            const service = new WaniKaniService(token);
+            wkData = await service.fetchAllData();
+            await StorageService.setWaniKaniData(wkData);
+          } catch (fetchErr) {
+            setError('Could not load WaniKani data. Please reconnect.');
+            setLoading(false);
+            return;
+          }
         }
 
         // Build knowledge model
@@ -42,15 +48,19 @@ export function HomePage() {
         const recommended = recommendPassage(passages, knowledge, completedIds);
 
         if (!recommended) {
-          setError('All passages completed!');
+          setError('No passage available right now. Please open Texts and pick one manually.');
           setTodayPassage(null);
+          setScoreReason('');
         } else {
+          setError('');
           setTodayPassage(recommended);
 
           // Get score reason
           const scored = scorePassage(recommended, knowledge, completedIds);
           if (scored) {
             setScoreReason(getPassageScoreReason(scored));
+          } else {
+            setScoreReason('matches your unlocked kanji and selected filters');
           }
         }
 
@@ -66,7 +76,7 @@ export function HomePage() {
     };
 
     loadPassage();
-  }, [navigate]);
+  }, []);
 
   if (loading) {
     return (
@@ -79,12 +89,26 @@ export function HomePage() {
     );
   }
 
+  const handleSignOut = async () => {
+    StorageService.clearWaniKaniToken();
+    await StorageService.clearWaniKaniData();
+    navigate('/setup');
+  };
+
   return (
     <div className="container max-w-4xl mx-auto py-6 px-4">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">N2 Reader</h1>
-        <p className="text-gray-600">Today's Reading Practice</p>
+      <div className="mb-8 flex justify-between items-start">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">N2 Reader</h1>
+          <p className="text-gray-600">Today's Reading Practice</p>
+        </div>
+        <button
+          onClick={handleSignOut}
+          className="px-4 py-2 text-sm text-gray-600 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors"
+        >
+          Sign Out
+        </button>
       </div>
 
       {/* Stats Cards */}
@@ -126,6 +150,12 @@ export function HomePage() {
                   ~{todayPassage.estimatedMinutes} min
                 </span>
               </div>
+              <div className="flex items-center text-gray-700">
+                <span className="font-medium mr-2">Source:</span>
+                <span className="px-3 py-1 rounded bg-gray-100 capitalize">
+                  {todayPassage.source ?? 'local'}
+                </span>
+              </div>
             </div>
 
             {scoreReason && (
@@ -146,12 +176,26 @@ export function HomePage() {
         </div>
       ) : error ? (
         <div className="card bg-amber-50 border border-amber-200">
-          <p className="text-amber-800 text-center py-8">{error}</p>
+          <p className="text-amber-800 text-center py-4">{error}</p>
+          {error.includes('reconnect') && (
+            <button
+              onClick={handleSignOut}
+              className="mt-4 w-full px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+            >
+              Reconnect to WaniKani
+            </button>
+          )}
         </div>
       ) : null}
 
       {/* Navigation to History */}
-      <div className="text-center mt-8">
+      <div className="text-center mt-8 flex flex-wrap justify-center gap-3">
+        <button
+          onClick={() => navigate('/texts')}
+          className="btn btn-primary"
+        >
+          Browse Texts →
+        </button>
         <button
           onClick={() => navigate('/history')}
           className="btn btn-secondary"

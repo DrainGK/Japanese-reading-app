@@ -21,9 +21,10 @@ export interface WaniKaniAssignment {
 
 export interface WaniKaniSubject {
   id: number;
-  type: 'radical' | 'kanji' | 'vocabulary';
-  object: string;
+  type?: 'radical' | 'kanji' | 'vocabulary' | 'kana_vocabulary';
+  object: 'radical' | 'kanji' | 'vocabulary' | 'kana_vocabulary';
   data: {
+    level?: number;
     slug: string;
     characters: string | null;
     meanings: Array<{ meaning: string }>;
@@ -38,13 +39,16 @@ export interface WaniKaniReview {
     subject_id: number;
     starting_srs_stage: number;
     ending_srs_stage: number;
-    correct: boolean;
+    correct?: boolean;
+    incorrect_meaning_answers?: number;
+    incorrect_reading_answers?: number;
   };
 }
 
 // Knowledge model
 export interface KnowledgeModel {
   level: number;
+  unlockedKanji: Set<string>;
   knownKanji: Set<string>;
   knownVocab: Set<string>;
   weakItems: Set<string>;
@@ -57,6 +61,7 @@ export interface ReadingPassage {
   title: string;
   summary: string;
   theme: 'daily-life' | 'society' | 'work' | 'culture' | 'history' | 'opinion';
+  source?: 'local' | 'aozora';
   difficulty: 'easy' | 'normal' | 'hard';
   text: string;
   estimatedMinutes: number;
@@ -102,4 +107,7 @@ export interface WaniKaniData {
   subjects: Map<number, WaniKaniSubject>;
   reviews: WaniKaniReview[];
   fetchedAt: number;
+  kanjiSubjects: WaniKaniSubject[];
+  vocabularySubjects: WaniKaniSubject[];
+  kanaVocabularySubjects: WaniKaniSubject[];
 }

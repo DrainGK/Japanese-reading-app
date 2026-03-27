@@ -6,17 +6,30 @@ import { useSession } from '../hooks/useSession';
 export function QuestionsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { session, answerQuestion, nextQuestion, previousQuestion, resetSession } = useSession();
+  const { session, answerQuestion, nextQuestion, previousQuestion, resetSession, startSession } = useSession();
   const [hasAnswered, setHasAnswered] = useState(false);
 
   const passage = passages.find((p) => p.id === id);
 
   useEffect(() => {
-    if (!passage || !session.passage || session.passage.id !== passage.id) {
+    if (!passage) {
       navigate('/');
       return;
     }
-  }, [passage, session.passage, navigate]);
+
+    if (!session.passage) {
+      startSession(passage);
+      return;
+    }
+
+    if (session.passage.id !== passage.id) {
+      startSession(passage);
+    }
+  }, [passage, session.passage, navigate, startSession]);
+
+  useEffect(() => {
+    setHasAnswered(session.answers[session.currentQuestionIndex] !== undefined);
+  }, [session.answers, session.currentQuestionIndex]);
 
   if (!passage || !session.passage) {
     return <div className="text-center py-12">Loading...</div>;
