@@ -6,8 +6,6 @@ import { StorageService } from '../services/storage';
 import { ReadingPassage, WaniKaniData } from '../types';
 import { getMatchingVocabularyTokens } from '../lib/passageMatching';
 
-type HighlightKind = 'kanji' | 'vocab' | 'none';
-
 type HighlightSets = {
   kanji: Set<string>;
   vocab: Set<string>;
@@ -45,18 +43,6 @@ function buildHighlightSets(passage: ReadingPassage, data: WaniKaniData | null):
     kanji: new Set(passage.kanjiList.filter((kanji) => wkKanji.has(kanji))),
     vocab: getMatchingVocabularyTokens(passage.text, wkVocab),
   };
-}
-
-function getTokenKind(token: string, sets: HighlightSets): HighlightKind {
-  if (sets.vocab.has(token)) return 'vocab';
-  if (sets.kanji.has(token)) return 'kanji';
-  return 'none';
-}
-
-function getTokenClass(kind: HighlightKind): string {
-  if (kind === 'vocab') return GREEN_HIGHLIGHT;
-  if (kind === 'kanji') return BLUE_HIGHLIGHT;
-  return '';
 }
 
 function renderParagraphWithHighlights(

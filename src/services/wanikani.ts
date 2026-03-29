@@ -183,8 +183,15 @@ export class WaniKaniService {
       };
 
       subjects.forEach((subject) => {
-        if (subject.type in subjectTypeCounts) {
-          subjectTypeCounts[subject.type] += 1;
+        switch (subject.type) {
+          case 'radical':
+          case 'kanji':
+          case 'vocabulary':
+          case 'kana_vocabulary':
+            subjectTypeCounts[subject.type] += 1;
+            break;
+          default:
+            break;
         }
       });
 
