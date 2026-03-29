@@ -1,0 +1,629 @@
+{
+  "total_selected_passages": 2000,
+  "top_authors": [
+    {
+      "author": "夏目漱石",
+      "author_romaji": "Natsume Soseki",
+      "count": 120
+    },
+    {
+      "author": "芥川竜之介",
+      "author_romaji": "Akutagawa Ryunosuke",
+      "count": 120
+    },
+    {
+      "author": "太宰治",
+      "author_romaji": "Dazai Osamu",
+      "count": 120
+    },
+    {
+      "author": "寺田寅彦",
+      "author_romaji": "Terada Torahiko",
+      "count": 120
+    },
+    {
+      "author": "森鴎外",
+      "author_romaji": "Mori Ogai",
+      "count": 120
+    },
+    {
+      "author": "宮沢賢治",
+      "author_romaji": "Miyazawa Kenji",
+      "count": 120
+    },
+    {
+      "author": "岡本綺堂",
+      "author_romaji": "Okamoto Kido",
+      "count": 120
+    },
+    {
+      "author": "中島敦",
+      "author_romaji": "Nakajima Atsushi",
+      "count": 120
+    },
+    {
+      "author": "三木清",
+      "author_romaji": "Miki Kiyoshi",
+      "count": 120
+    },
+    {
+      "author": "柳田国男",
+      "author_romaji": "Yanagita Kunio",
+      "count": 120
+    },
+    {
+      "author": "和辻哲郎",
+      "author_romaji": "Watsuji Tetsuro",
+      "count": 120
+    },
+    {
+      "author": "モーパッサンギ・ド",
+      "author_romaji": "Maupassant Guy De",
+      "count": 84
+    },
+    {
+      "author": "ルナールジュール",
+      "author_romaji": "Renard Jules",
+      "count": 72
+    },
+    {
+      "author": "ルブランモーリス",
+      "author_romaji": "Leblanc Maurice",
+      "count": 69
+    },
+    {
+      "author": "ロランロマン",
+      "author_romaji": "Rolland Romain",
+      "count": 48
+    },
+    {
+      "author": "ユゴーヴィクトル",
+      "author_romaji": "Hugo Victor",
+      "count": 48
+    },
+    {
+      "author": "久生十蘭",
+      "author_romaji": "Hisao Juran",
+      "count": 45
+    },
+    {
+      "author": "ペローシャルル",
+      "author_romaji": "Perrault Charles",
+      "count": 35
+    },
+    {
+      "author": "アンデルセンハンス・クリスチャン",
+      "author_romaji": "Andersen Hans Christian",
+      "count": 28
+    },
+    {
+      "author": "デカルトルネ",
+      "author_romaji": "Descartes Rene",
+      "count": 24
+    },
+    {
+      "author": "鈴木三重吉",
+      "author_romaji": "Suzuki Miekichi",
+      "count": 24
+    },
+    {
+      "author": "カフカフランツ",
+      "author_romaji": "Kafka Franz",
+      "count": 24
+    },
+    {
+      "author": "ドストエフスキーフィヨードル・ミハイロヴィチ",
+      "author_romaji": "Dostoevskii Fedor Mikhailovich",
+      "count": 22
+    },
+    {
+      "author": "下村湖人",
+      "author_romaji": "Shimomura Kojin",
+      "count": 13
+    },
+    {
+      "author": "三好十郎",
+      "author_romaji": "Miyoshi Juro",
+      "count": 11
+    },
+    {
+      "author": "林不忘",
+      "author_romaji": "Hayashi Fubo",
+      "count": 10
+    },
+    {
+      "author": "オルコットルイーザ・メイ",
+      "author_romaji": "Alcott Louisa May",
+      "count": 9
+    },
+    {
+      "author": "倉田百三",
+      "author_romaji": "Kurata Hyakuzo",
+      "count": 8
+    },
+    {
+      "author": "ディケンズチャールズ",
+      "author_romaji": "Dickens Charles",
+      "count": 7
+    },
+    {
+      "author": "ゴーゴリニコライ",
+      "author_romaji": "Gogol Nikolai",
+      "count": 5
+    },
+    {
+      "author": "高見順",
+      "author_romaji": "Takami Jun",
+      "count": 5
+    },
+    {
+      "author": "ツルゲーネフイワン",
+      "author_romaji": "Turgenev Ivan",
+      "count": 5
+    },
+    {
+      "author": "豊島与志雄",
+      "author_romaji": "Toyoshima Yoshio",
+      "count": 5
+    },
+    {
+      "author": "スティーブンソンロバート・ルイス",
+      "author_romaji": "Stevenson Robert Louis",
+      "count": 5
+    },
+    {
+      "author": "アーヴィングワシントン",
+      "author_romaji": "Irving Washington",
+      "count": 4
+    },
+    {
+      "author": "内村鑑三",
+      "author_romaji": "Uchimura Kanzo",
+      "count": 4
+    },
+    {
+      "author": "チェーホフアントン",
+      "author_romaji": "Chekhov Anton",
+      "count": 4
+    },
+    {
+      "author": "原口統三",
+      "author_romaji": "Haraguchi Tozo",
+      "count": 4
+    },
+    {
+      "author": "室生犀星",
+      "author_romaji": "Murou Saisei",
+      "count": 4
+    },
+    {
+      "author": "葉山嘉樹",
+      "author_romaji": "Hayama Yoshiki",
+      "count": 4
+    },
+    {
+      "author": "ランボージャン・ニコラ・アルチュール",
+      "author_romaji": "Rimbaud Jean Nicolas Arthur",
+      "count": 3
+    },
+    {
+      "author": "バーネットフランシス・ホジソン・エリザ",
+      "author_romaji": "Burnett Frances Eliza Hodgson",
+      "count": 3
+    },
+    {
+      "author": "堀辰雄",
+      "author_romaji": "Hori Tatsuo",
+      "count": 3
+    },
+    {
+      "author": "ストレイチーリットン",
+      "author_romaji": "Strachey Lytton",
+      "count": 2
+    },
+    {
+      "author": "ポーエドガー・アラン",
+      "author_romaji": "Poe Edgar Allan",
+      "count": 2
+    },
+    {
+      "author": "マンパウル・トーマス",
+      "author_romaji": "Mann Paul Thomas",
+      "count": 2
+    },
+    {
+      "author": "森本薫",
+      "author_romaji": "Morimoto Kaoru",
+      "count": 2
+    },
+    {
+      "author": "レスコーフニコライ・セミョーノヴィチ",
+      "author_romaji": "Leskov Nikolai Semyonovich",
+      "count": 2
+    },
+    {
+      "author": "ボードレールシャルル・ピエール",
+      "author_romaji": "Baudelaire Charles Pierre",
+      "count": 2
+    },
+    {
+      "author": "伊丹万作",
+      "author_romaji": "Itami Mansaku",
+      "count": 2
+    }
+  ],
+  "theme_distribution": {
+    "literature": 292,
+    "philosophy": 482,
+    "mystery": 150,
+    "history": 403,
+    "travel": 159,
+    "daily-life": 359,
+    "society": 25,
+    "nature": 104,
+    "war": 8,
+    "work": 4,
+    "humor": 6,
+    "children": 3,
+    "general": 5
+  },
+  "difficulty_distribution": {
+    "normal": 1668,
+    "hard": 322,
+    "easy": 10
+  },
+  "writing_type_distribution": {
+    "modern Japanese orthography": 1994,
+    "mixed orthography (new kanji, old kana)": 6
+  },
+  "decade_distribution": {
+    "1920": 53,
+    "1930": 134,
+    "1940": 222,
+    "1950": 376,
+    "1960": 500,
+    "1970": 163,
+    "1980": 300,
+    "1990": 225,
+    "2000": 27
+  },
+  "year_distribution_top_50": [
+    {
+      "year": 1950,
+      "count": 131
+    },
+    {
+      "year": 1966,
+      "count": 113
+    },
+    {
+      "year": 1948,
+      "count": 105
+    },
+    {
+      "year": 1988,
+      "count": 87
+    },
+    {
+      "year": 1969,
+      "count": 82
+    },
+    {
+      "year": 1987,
+      "count": 80
+    },
+    {
+      "year": 1960,
+      "count": 78
+    },
+    {
+      "year": 1951,
+      "count": 77
+    },
+    {
+      "year": 1968,
+      "count": 67
+    },
+    {
+      "year": 1970,
+      "count": 67
+    },
+    {
+      "year": 1954,
+      "count": 64
+    },
+    {
+      "year": 1938,
+      "count": 64
+    },
+    {
+      "year": 1967,
+      "count": 60
+    },
+    {
+      "year": 1992,
+      "count": 58
+    },
+    {
+      "year": 1947,
+      "count": 57
+    },
+    {
+      "year": 1989,
+      "count": 57
+    },
+    {
+      "year": 1986,
+      "count": 56
+    },
+    {
+      "year": 1949,
+      "count": 50
+    },
+    {
+      "year": 1937,
+      "count": 48
+    },
+    {
+      "year": 1990,
+      "count": 39
+    },
+    {
+      "year": 1965,
+      "count": 34
+    },
+    {
+      "year": 1995,
+      "count": 34
+    },
+    {
+      "year": 1955,
+      "count": 33
+    },
+    {
+      "year": 1964,
+      "count": 32
+    },
+    {
+      "year": 1952,
+      "count": 29
+    },
+    {
+      "year": 1994,
+      "count": 28
+    },
+    {
+      "year": 1979,
+      "count": 27
+    },
+    {
+      "year": 1928,
+      "count": 26
+    },
+    {
+      "year": 1956,
+      "count": 25
+    },
+    {
+      "year": 1961,
+      "count": 24
+    },
+    {
+      "year": 2001,
+      "count": 24
+    },
+    {
+      "year": 1976,
+      "count": 23
+    },
+    {
+      "year": 1999,
+      "count": 22
+    },
+    {
+      "year": 1922,
+      "count": 21
+    },
+    {
+      "year": 1993,
+      "count": 19
+    },
+    {
+      "year": 1972,
+      "count": 16
+    },
+    {
+      "year": 1996,
+      "count": 14
+    },
+    {
+      "year": 1982,
+      "count": 13
+    },
+    {
+      "year": 1957,
+      "count": 13
+    },
+    {
+      "year": 1939,
+      "count": 10
+    },
+    {
+      "year": 1977,
+      "count": 8
+    },
+    {
+      "year": 1936,
+      "count": 7
+    },
+    {
+      "year": 1991,
+      "count": 6
+    },
+    {
+      "year": 1974,
+      "count": 6
+    },
+    {
+      "year": 1985,
+      "count": 6
+    },
+    {
+      "year": 1971,
+      "count": 6
+    },
+    {
+      "year": 1962,
+      "count": 6
+    },
+    {
+      "year": 1940,
+      "count": 5
+    },
+    {
+      "year": 1927,
+      "count": 5
+    },
+    {
+      "year": 1935,
+      "count": 5
+    }
+  ],
+  "favorite_author_presence": [
+    {
+      "author": "クローデルポール",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 0
+    },
+    {
+      "author": "デカルトルネ",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 24
+    },
+    {
+      "author": "パスカルブレーズ",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 0
+    },
+    {
+      "author": "ペローシャルル",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 35
+    },
+    {
+      "author": "ボードレールシャルル・ピエール",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 2
+    },
+    {
+      "author": "マラルメステファヌ",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 0
+    },
+    {
+      "author": "ミュッセアルフレッド",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 0
+    },
+    {
+      "author": "モーパッサンギ・ド",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 84
+    },
+    {
+      "author": "ユゴーヴィクトル",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 48
+    },
+    {
+      "author": "ランボージャン・ニコラ・アルチュール",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 3
+    },
+    {
+      "author": "ルナールジュール",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 72
+    },
+    {
+      "author": "ルブランモーリス",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 69
+    },
+    {
+      "author": "ロティピエール",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 0
+    },
+    {
+      "author": "ロランロマン",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 48
+    },
+    {
+      "author": "ヴァレリーポール",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 1
+    },
+    {
+      "author": "三木清",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "中島敦",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "和辻哲郎",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "夏目漱石",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "太宰治",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "宮沢賢治",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "寺田寅彦",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "岡本綺堂",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "柳田国男",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "森鴎外",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "芥川竜之介",
+      "present_in_full_corpus": true,
+      "selected_passage_count": 120
+    },
+    {
+      "author": "芥川龍之介",
+      "present_in_full_corpus": false,
+      "selected_passage_count": 0
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import gzip
 import json
 import math
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from urllib.request import urlretrieve
 
@@ -10,31 +10,93 @@ DATA_URL = "https://huggingface.co/datasets/globis-university/aozorabunko-clean/
 RAW_FILE = Path("aozorabunko-dedupe-clean.jsonl.gz")
 
 DATA_DIR = Path("src/data")
-OUTPUT_FILE = DATA_DIR / "passages.json"
 FULL_CORPUS_FILE = DATA_DIR / "full_text_corpus.json"
+PASSAGES_FILE = DATA_DIR / "passages.json"
+CURATED_SUMMARY_FILE = DATA_DIR / "curated_corpus_summary.json"
 
-# Corpus size tuning
-MAX_BOOKS = 300
-TARGET_PASSAGES = 500
+# ===== OUTPUT SIZE =====
+TARGET_PASSAGES = 2000
 
-# Passage tuning
-MIN_CHARS = 250
-TARGET_CHARS = 700
-MAX_CHARS = 950
+# ===== PASSAGE SPLIT =====
+MIN_CHARS = 280
+TARGET_CHARS = 850
+MAX_CHARS = 1100
 
-# Quality filters
 MAX_NEWLINES_RATIO = 0.18
 MIN_JAPANESE_CHAR_RATIO = 0.55
 
-# If True, only keep 新字新仮名 for passages.json
-MODERN_ONLY_FOR_PASSAGES = True
+# ===== FILTERING =====
+ALLOW_MODERN = True
+ALLOW_MIXED_NEW_KANJI_OLD_KANA = True
+ALLOW_HISTORICAL_FOR_FAVORITES = False
 
-# If True, full_text_corpus.json will analyze all rows
-# If False, it will only analyze rows that pass the modern filter
-FULL_CORPUS_USE_ALL_ROWS = True
+MAX_PASSAGES_PER_AUTHOR = 120
+MAX_PASSAGES_PER_WORK = 24
+MAX_PASSAGES_PER_THEME = 700
+MAX_PASSAGES_PER_DECADE = 500
+
+# ===== USER TASTE =====
+FAVORITE_JAPANESE_AUTHORS = {
+    "夏目漱石",
+    "芥川竜之介",
+    "芥川龍之介",
+    "森鴎外",
+    "太宰治",
+    "中島敦",
+    "宮沢賢治",
+    "岡本綺堂",
+    "寺田寅彦",
+    "和辻哲郎",
+    "三木清",
+    "柳田国男",
+}
+
+FAVORITE_FRENCH_OR_EURO_AUTHORS = {
+    "モーパッサンギ・ド",
+    "ユゴーヴィクトル",
+    "ルブランモーリス",
+    "ボードレールシャルル・ピエール",
+    "ランボージャン・ニコラ・アルチュール",
+    "デカルトルネ",
+    "パスカルブレーズ",
+    "ロランロマン",
+    "ヴァレリーポール",
+    "マラルメステファヌ",
+    "ペローシャルル",
+    "ミュッセアルフレッド",
+    "クローデルポール",
+    "ルナールジュール",
+    "ロティピエール",
+}
+
+PREFERRED_THEMES = {
+    "literature": 1.6,
+    "history": 1.35,
+    "mystery": 1.25,
+    "philosophy": 1.25,
+    "society": 1.15,
+    "travel": 1.0,
+    "daily-life": 1.0,
+    "nature": 0.95,
+    "children": 0.8,
+    "humor": 0.8,
+    "war": 0.9,
+    "work": 0.85,
+    "general": 0.7,
+}
+
+WRITING_TYPE_MAP = {
+    "新字新仮名": "modern Japanese orthography",
+    "旧字旧仮名": "historical Japanese orthography",
+    "新字旧仮名": "mixed orthography (new kanji, old kana)",
+    "旧字新仮名": "mixed orthography (old kanji, new kana)",
+    "その他": "other",
+    "Unknown": "unknown",
+    "": "unknown",
+}
 
 
-def download_file():
+def download_dataset() -> None:
     if RAW_FILE.exists():
         print(f"Using existing file: {RAW_FILE}")
         return
@@ -44,6 +106,16 @@ def download_file():
     print("Download complete.")
 
 
+def load_full_corpus_stats() -> dict:
+    if not FULL_CORPUS_FILE.exists():
+        raise FileNotFoundError(
+            f"{FULL_CORPUS_FILE} not found. Generate full_text_corpus.json first."
+        )
+
+    with open(FULL_CORPUS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
 def normalize_text(text: str) -> str:
     text = text.replace("\r\n", "\n").replace("\r", "\n")
     text = re.sub(r"[ \t\u3000]+", " ", text)
@@ -51,22 +123,22 @@ def normalize_text(text: str) -> str:
     return text.strip()
 
 
-def split_into_paragraphs(text: str):
+def split_into_paragraphs(text: str) -> list[str]:
     parts = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
     if parts:
         return parts
     return [p.strip() for p in text.split("\n") if p.strip()]
 
 
-def split_sentences(text: str):
+def split_sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[。！？])", text) if s.strip()]
 
 
-def build_passages(paragraphs):
-    passages = []
+def build_passages(paragraphs: list[str]) -> list[str]:
+    passages: list[str] = []
     current = ""
 
-    def flush():
+    def flush() -> None:
         nonlocal current
         if current.strip():
             passages.append(current.strip())
@@ -115,7 +187,7 @@ def japanese_char_ratio(text: str) -> float:
     return len(jp_chars) / max(len(text), 1)
 
 
-def looks_good(text: str) -> bool:
+def is_good_passage(text: str) -> bool:
     if len(text) < MIN_CHARS:
         return False
 
@@ -133,7 +205,7 @@ def looks_good(text: str) -> bool:
 
 
 def estimate_minutes(text: str) -> int:
-    return max(3, min(10, math.ceil(len(text) / 350)))
+    return max(3, min(12, math.ceil(len(text) / 350)))
 
 
 def count_kanji(text: str) -> int:
@@ -155,9 +227,9 @@ def infer_difficulty(text: str) -> str:
 
     score = 0
 
-    if char_count > 850:
+    if char_count > 950:
         score += 2
-    elif char_count > 500:
+    elif char_count > 600:
         score += 1
 
     if kanji_ratio > 0.22:
@@ -165,31 +237,20 @@ def infer_difficulty(text: str) -> str:
     elif kanji_ratio > 0.16:
         score += 1
 
-    if avg_sentence_len > 50:
+    if avg_sentence_len > 55:
         score += 2
-    elif avg_sentence_len > 30:
+    elif avg_sentence_len > 35:
         score += 1
 
     if score <= 1:
         return "easy"
-    elif score <= 3:
+    if score <= 3:
         return "normal"
     return "hard"
 
 
-def modern_only(meta: dict) -> bool:
-    return meta.get("文字遣い種別") == "新字新仮名"
-
-
 def extract_title(meta: dict) -> str:
-    candidate_keys = [
-        "作品名",
-        "title",
-        "タイトル",
-        "作品",
-        "name",
-    ]
-    for key in candidate_keys:
+    for key in ["作品名", "title", "タイトル", "作品", "name"]:
         value = meta.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -197,22 +258,12 @@ def extract_title(meta: dict) -> str:
 
 
 def extract_author(meta: dict) -> str:
-    sei = (meta.get("姓") or meta.get("著者姓") or "").strip()
+    sei = (meta.get("姓") or "").strip()
     mei = (meta.get("名") or "").strip()
     if sei or mei:
         return f"{sei}{mei}".strip()
 
-    candidate_keys = [
-        "姓名",
-        "著者名",
-        "著者",
-        "作者名",
-        "作家名",
-        "人物",
-        "name",
-        "author",
-    ]
-    for key in candidate_keys:
+    for key in ["姓名", "著者名", "著者", "作者名", "作家名", "人物", "name", "author"]:
         value = meta.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
@@ -220,29 +271,40 @@ def extract_author(meta: dict) -> str:
     return "Unknown"
 
 
+def extract_author_romaji(meta: dict) -> str:
+    sei_romaji = (meta.get("姓ローマ字") or "").strip()
+    mei_romaji = (meta.get("名ローマ字") or "").strip()
+    if sei_romaji or mei_romaji:
+        return f"{sei_romaji} {mei_romaji}".strip()
+    return ""
+
+
 def extract_writing_type(meta: dict) -> str:
-    return (meta.get("文字遣い種別") or "Unknown").strip()
+    raw = (meta.get("文字遣い種別") or "Unknown").strip()
+    return WRITING_TYPE_MAP.get(raw, raw)
 
 
-def author_theme_hint(author: str):
-    hints = {
-        "夏目漱石": "literature",
-        "芥川龍之介": "literature",
-        "太宰治": "literature",
-        "森鴎外": "literature",
-        "宮沢賢治": "children",
-        "福沢諭吉": "society",
-        "岡本綺堂": "mystery",
-        "新美南吉": "children",
-    }
-    return hints.get(author)
+def extract_publication_year(meta: dict) -> int | None:
+    for key in ["底本初版発行年1", "底本初版発行年2", "初版発行年", "発行年", "出版年"]:
+        value = meta.get(key)
+        if isinstance(value, str) and value.strip():
+            match = re.search(r"\b(18|19|20)\d{2}\b", value)
+            if match:
+                return int(match.group(0))
+    return None
+
+
+def extract_decade(year: int | None) -> int | None:
+    if year is None:
+        return None
+    return (year // 10) * 10
 
 
 def infer_theme(title: str, text: str, author: str = "") -> str:
-    sample = f"{title}\n{text[:1200]}\n{author}"
+    sample = f"{title}\n{text[:1400]}\n{author}"
 
     theme_rules = {
-        "history": ["歴史", "戦", "幕府", "武士", "明治", "時代", "城", "将軍", "維新", "皇"],
+        "history": ["歴史", "戦", "幕府", "武士", "明治", "時代", "城", "将軍", "維新", "皇", "古代"],
         "daily-life": ["家", "母", "父", "学校", "先生", "友達", "朝", "夜", "ご飯", "日常", "家庭"],
         "society": ["社会", "文明", "文化", "政治", "経済", "国家", "民衆", "教育", "思想"],
         "work": ["会社", "仕事", "労働", "職業", "商売", "銀行", "工場", "事務", "営業"],
@@ -262,113 +324,289 @@ def infer_theme(title: str, text: str, author: str = "") -> str:
             scores[theme] += sample.count(kw)
 
     best_theme = max(scores, key=scores.get)
-    if scores[best_theme] == 0:
-        return "general"
-    return best_theme
+    return best_theme if scores[best_theme] > 0 else "general"
 
 
-def make_record(book_index: int, passage_index: int, title: str, author: str, passage: str):
-    hint = author_theme_hint(author)
-    theme = hint if hint else infer_theme(title, passage, author)
+def is_favorite_japanese_author(author: str) -> bool:
+    return author in FAVORITE_JAPANESE_AUTHORS
+
+
+def is_favorite_french_or_euro_author(author: str) -> bool:
+    return author in FAVORITE_FRENCH_OR_EURO_AUTHORS
+
+
+def is_allowed_writing_type(writing_type: str, author: str) -> bool:
+    if writing_type == "modern Japanese orthography":
+        return True
+
+    if writing_type == "mixed orthography (new kanji, old kana)":
+        return ALLOW_MIXED_NEW_KANJI_OLD_KANA
+
+    if writing_type in {"historical Japanese orthography", "mixed orthography (old kanji, new kana)"}:
+        if ALLOW_HISTORICAL_FOR_FAVORITES and (
+            is_favorite_japanese_author(author) or is_favorite_french_or_euro_author(author)
+        ):
+            return True
+        return False
+
+    return False
+
+
+def score_passage(
+    *,
+    author: str,
+    writing_type: str,
+    theme: str,
+    publication_year: int | None,
+    difficulty: str,
+    text: str,
+) -> float:
+    score = 0.0
+
+    if author == "夏目漱石":
+        score += 14.0
+    elif is_favorite_japanese_author(author):
+        score += 9.0
+
+    if is_favorite_french_or_euro_author(author):
+        score += 8.0
+
+    if writing_type == "modern Japanese orthography":
+        score += 7.0
+    elif writing_type == "mixed orthography (new kanji, old kana)":
+        score += 1.5
+    else:
+        score -= 8.0
+
+    score += PREFERRED_THEMES.get(theme, 0.7) * 3.0
+
+    if publication_year is not None:
+        if 1900 <= publication_year <= 1970:
+            score += 2.0
+        elif 1971 <= publication_year <= 2000:
+            score += 1.2
+        elif publication_year < 1900:
+            score -= 1.0
+
+    if difficulty == "normal":
+        score += 3.0
+    elif difficulty == "easy":
+        score += 1.8
+    elif difficulty == "hard":
+        score += 1.7
+
+    n = len(text)
+    if 350 <= n <= 950:
+        score += 1.5
+    elif n > 1100:
+        score -= 0.8
+
+    kanji_ratio = count_kanji(text) / max(len(text), 1)
+    if kanji_ratio > 0.24:
+        score -= 1.2
+    elif kanji_ratio < 0.10:
+        score -= 0.4
+
+    return score
+
+
+def load_available_authors_from_stats(stats: dict) -> set[str]:
+    return {item["author"] for item in stats.get("all_authors", [])}
+
+
+def build_candidate_record(
+    book_index: int,
+    passage_index: int,
+    title: str,
+    author: str,
+    author_romaji: str,
+    writing_type: str,
+    publication_year: int | None,
+    passage: str,
+) -> dict:
+    theme = infer_theme(title, passage, author)
     difficulty = infer_difficulty(passage)
+    decade = extract_decade(publication_year)
+
+    score = score_passage(
+        author=author,
+        writing_type=writing_type,
+        theme=theme,
+        publication_year=publication_year,
+        difficulty=difficulty,
+        text=passage,
+    )
 
     return {
-        "id": f"aozora-{book_index}-{passage_index}",
+        "id": f"curated-{book_index}-{passage_index}",
         "source": "aozora",
         "title": title,
         "author": author,
+        "author_romaji": author_romaji,
+        "writing_type": writing_type,
+        "publication_year": publication_year,
+        "decade": decade,
         "theme": theme,
         "difficulty": difficulty,
         "estimatedMinutes": estimate_minutes(passage),
+        "score": round(score, 3),
         "text": passage,
-        "questions": []
+        "questions": [],
     }
 
 
-def print_meta_sample(meta: dict, count: int):
-    print(f"\n--- META SAMPLE {count} ---")
-    print(json.dumps(meta, ensure_ascii=False, indent=2))
+def select_diverse_corpus(candidates: list[dict]) -> list[dict]:
+    selected: list[dict] = []
+
+    author_counts = Counter()
+    work_counts = Counter()
+    theme_counts = Counter()
+    decade_counts = Counter()
+
+    candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
+
+    for item in candidates:
+        author = item["author"]
+        title = item["title"]
+        theme = item["theme"]
+        decade = item["decade"]
+
+        if author_counts[author] >= MAX_PASSAGES_PER_AUTHOR:
+            continue
+        if work_counts[title] >= MAX_PASSAGES_PER_WORK:
+            continue
+        if theme_counts[theme] >= MAX_PASSAGES_PER_THEME:
+            continue
+        if decade is not None and decade_counts[decade] >= MAX_PASSAGES_PER_DECADE:
+            continue
+
+        selected.append(item)
+        author_counts[author] += 1
+        work_counts[title] += 1
+        theme_counts[theme] += 1
+        if decade is not None:
+            decade_counts[decade] += 1
+
+        if len(selected) >= TARGET_PASSAGES:
+            break
+
+    return selected
 
 
-def update_full_corpus_stats(stats, title: str, author: str, writing_type: str):
-    stats["total_books"] += 1
-    stats["authors_set"].add(author)
-    stats["books_per_author"][author] += 1
-    stats["works_counter"][title] += 1
-    stats["authors_counter"][author] += 1
-    stats["writing_type_distribution"][writing_type] += 1
+def build_summary(selected: list[dict], available_authors: set[str]) -> dict:
+    author_counts = Counter(item["author"] for item in selected)
+    theme_counts = Counter(item["theme"] for item in selected)
+    difficulty_counts = Counter(item["difficulty"] for item in selected)
+    writing_type_counts = Counter(item["writing_type"] for item in selected)
+    decade_counts = Counter(item["decade"] for item in selected if item["decade"] is not None)
+    year_counts = Counter(item["publication_year"] for item in selected if item["publication_year"] is not None)
 
+    favorite_author_presence = []
+    for author in sorted(FAVORITE_JAPANESE_AUTHORS | FAVORITE_FRENCH_OR_EURO_AUTHORS):
+        favorite_author_presence.append(
+            {
+                "author": author,
+                "present_in_full_corpus": author in available_authors,
+                "selected_passage_count": author_counts.get(author, 0),
+            }
+        )
 
-def build_full_corpus_payload(stats):
-    all_authors_sorted = sorted(stats["authors_set"])
-
-    books_per_author_sorted = [
-        {"author": author, "book_count": count}
-        for author, count in sorted(stats["books_per_author"].items(), key=lambda x: (-x[1], x[0]))
-    ]
-
-    top_works = [
-        {"title": title, "count": count}
-        for title, count in stats["works_counter"].most_common(50)
-    ]
-
-    top_authors = [
-        {"author": author, "count": count}
-        for author, count in stats["authors_counter"].most_common(50)
-    ]
-
-    writing_type_distribution = [
-        {"writing_type": writing_type, "count": count}
-        for writing_type, count in stats["writing_type_distribution"].most_common()
-    ]
+    top_authors = []
+    for author, count in author_counts.most_common(50):
+        romaji = next(
+            (
+                item["author_romaji"]
+                for item in selected
+                if item["author"] == author and item["author_romaji"]
+            ),
+            "",
+        )
+        top_authors.append(
+            {
+                "author": author,
+                "author_romaji": romaji,
+                "count": count,
+            }
+        )
 
     return {
-        "total_books": stats["total_books"],
-        "total_unique_authors": len(stats["authors_set"]),
-        "all_authors": all_authors_sorted,
-        "books_per_author": books_per_author_sorted,
-        "top_works": top_works,
+        "total_selected_passages": len(selected),
         "top_authors": top_authors,
-        "writing_type_distribution": writing_type_distribution,
+        "theme_distribution": dict(theme_counts),
+        "difficulty_distribution": dict(difficulty_counts),
+        "writing_type_distribution": dict(writing_type_counts),
+        "decade_distribution": dict(sorted(decade_counts.items())),
+        "year_distribution_top_50": [
+            {"year": year, "count": count}
+            for year, count in year_counts.most_common(50)
+        ],
+        "favorite_author_presence": favorite_author_presence,
     }
 
 
-def main():
-    download_file()
+def to_base36(value: int) -> str:
+    digits = "0123456789abcdefghijklmnopqrstuvwxyz"
+    if value == 0:
+        return "0"
 
+    parts: list[str] = []
+    while value > 0:
+        value, remainder = divmod(value, 36)
+        parts.append(digits[remainder])
+    return "".join(reversed(parts))
+
+
+def build_frontend_passages(selected: list[dict]) -> list[dict]:
+    frontend_passages: list[dict] = []
+    for index, item in enumerate(selected):
+        frontend_passages.append(
+            {
+                "id": to_base36(index),
+                "title": item["title"],
+                "author": item["author"],
+                "difficulty": item["difficulty"],
+                "text": item["text"],
+            }
+        )
+    return frontend_passages
+
+
+def main() -> None:
+    download_dataset()
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    results = []
-    processed_books_for_passages = 0
-    debug_samples = 0
+    full_stats = load_full_corpus_stats()
+    available_authors = load_available_authors_from_stats(full_stats)
 
-    full_corpus_stats = {
-        "total_books": 0,
-        "authors_set": set(),
-        "books_per_author": defaultdict(int),
-        "works_counter": Counter(),
-        "authors_counter": Counter(),
-        "writing_type_distribution": Counter(),
-    }
+    print("Favorite Japanese authors present in full corpus:")
+    for author in sorted(FAVORITE_JAPANESE_AUTHORS):
+        if author in available_authors:
+            print(f"  OK  {author}")
+        else:
+            print(f"  --  {author}")
 
-    with gzip.open(RAW_FILE, "rt", encoding="utf-8") as f:
-        for line in f:
+    print("\nFavorite French / European authors present in full corpus:")
+    for author in sorted(FAVORITE_FRENCH_OR_EURO_AUTHORS):
+        if author in available_authors:
+            print(f"  OK  {author}")
+        else:
+            print(f"  --  {author}")
+
+    candidates: list[dict] = []
+
+    with gzip.open(RAW_FILE, "rt", encoding="utf-8") as file:
+        for book_index, line in enumerate(file):
             row = json.loads(line)
-
             meta = row.get("meta", {})
+
             title = extract_title(meta)
             author = extract_author(meta)
+            author_romaji = extract_author_romaji(meta)
             writing_type = extract_writing_type(meta)
+            publication_year = extract_publication_year(meta)
 
-            if FULL_CORPUS_USE_ALL_ROWS or modern_only(meta):
-                update_full_corpus_stats(full_corpus_stats, title, author, writing_type)
-
-            if MODERN_ONLY_FOR_PASSAGES and not modern_only(meta):
+            if not is_allowed_writing_type(writing_type, author):
                 continue
-
-            if debug_samples < 3:
-                print_meta_sample(meta, debug_samples + 1)
-                debug_samples += 1
 
             text = normalize_text(row.get("text", ""))
             if not text:
@@ -377,60 +615,53 @@ def main():
             paragraphs = split_into_paragraphs(text)
             passages = build_passages(paragraphs)
 
-            for i, passage in enumerate(passages):
-                if not looks_good(passage):
+            for passage_index, passage in enumerate(passages):
+                if not is_good_passage(passage):
                     continue
 
-                results.append(
-                    make_record(processed_books_for_passages, i, title, author, passage)
+                candidate = build_candidate_record(
+                    book_index=book_index,
+                    passage_index=passage_index,
+                    title=title,
+                    author=author,
+                    author_romaji=author_romaji,
+                    writing_type=writing_type,
+                    publication_year=publication_year,
+                    passage=passage,
                 )
+                candidates.append(candidate)
 
-                if len(results) >= TARGET_PASSAGES:
-                    break
+    print(f"\nBuilt {len(candidates)} candidate passages before diversity selection.")
 
-            processed_books_for_passages += 1
+    curated = select_diverse_corpus(candidates)
+    summary = build_summary(curated, available_authors)
+    frontend_passages = build_frontend_passages(curated)
 
-            if processed_books_for_passages >= MAX_BOOKS or len(results) >= TARGET_PASSAGES:
-                continue
+    with open(PASSAGES_FILE, "w", encoding="utf-8") as f:
+        json.dump(frontend_passages, f, ensure_ascii=False, separators=(",", ":"))
 
-    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    with open(CURATED_SUMMARY_FILE, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
 
-    full_corpus_payload = build_full_corpus_payload(full_corpus_stats)
-    with open(FULL_CORPUS_FILE, "w", encoding="utf-8") as f:
-        json.dump(full_corpus_payload, f, ensure_ascii=False, indent=2)
+    print(f"\nDone. Wrote {len(frontend_passages)} lightweight passages to {PASSAGES_FILE}")
+    print(f"Done. Wrote summary to {CURATED_SUMMARY_FILE}")
 
-    print(f"\nDone. Wrote {len(results)} passages to {OUTPUT_FILE}")
-    print(f"Done. Wrote corpus stats to {FULL_CORPUS_FILE}")
+    print("\nTop authors:")
+    for item in summary["top_authors"][:15]:
+        label = f"{item['author']} ({item['author_romaji']})" if item["author_romaji"] else item["author"]
+        print(f"  {label}: {item['count']}")
 
-    author_counts = {}
-    theme_counts = {}
-    difficulty_counts = {}
-
-    for item in results:
-        author_counts[item["author"]] = author_counts.get(item["author"], 0) + 1
-        theme_counts[item["theme"]] = theme_counts.get(item["theme"], 0) + 1
-        difficulty_counts[item["difficulty"]] = difficulty_counts.get(item["difficulty"], 0) + 1
-
-    print("\nTop authors in passages:")
-    for author, count in sorted(author_counts.items(), key=lambda x: x[1], reverse=True)[:10]:
-        print(f"  {author}: {count}")
-
-    print("\nThemes in passages:")
-    for theme, count in sorted(theme_counts.items(), key=lambda x: x[1], reverse=True):
+    print("\nTheme distribution:")
+    for theme, count in sorted(summary["theme_distribution"].items(), key=lambda x: x[1], reverse=True):
         print(f"  {theme}: {count}")
 
-    print("\nDifficulty in passages:")
-    for difficulty, count in sorted(difficulty_counts.items(), key=lambda x: x[1], reverse=True):
+    print("\nDifficulty distribution:")
+    for difficulty, count in sorted(summary["difficulty_distribution"].items(), key=lambda x: x[1], reverse=True):
         print(f"  {difficulty}: {count}")
 
-    print("\nTop authors in full corpus:")
-    for item in full_corpus_payload["top_authors"][:10]:
-        print(f"  {item['author']}: {item['count']}")
-
     print("\nWriting type distribution:")
-    for item in full_corpus_payload["writing_type_distribution"]:
-        print(f"  {item['writing_type']}: {item['count']}")
+    for writing_type, count in sorted(summary["writing_type_distribution"].items(), key=lambda x: x[1], reverse=True):
+        print(f"  {writing_type}: {count}")
 
 
 if __name__ == "__main__":
