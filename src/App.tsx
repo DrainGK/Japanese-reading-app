@@ -16,14 +16,30 @@ import './index.css';
 
 function App() {
   const [loading, setLoading] = useState(true);
-  const [isSetup, setIsSetup] = useState(() => !!StorageService.getWaniKaniToken());
+  const [isSetup, setIsSetup] = useState(false);
 
   useEffect(() => {
-    setLoading(false);
+    let mounted = true;
 
-    return StorageService.subscribeToAuthChange(() => {
-      setIsSetup(!!StorageService.getWaniKaniToken());
+    const refreshSetupState = async () => {
+      const hasToken = !!StorageService.getWaniKaniToken();
+      const hasCachedData = hasToken ? await StorageService.isWaniKaniDataCached() : false;
+
+      if (!mounted) return;
+      setIsSetup(hasToken && hasCachedData);
+      setLoading(false);
+    };
+
+    void refreshSetupState();
+
+    const unsubscribe = StorageService.subscribeToWaniKaniStateChange(() => {
+      void refreshSetupState();
     });
+
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
   }, []);
 
   if (loading) {

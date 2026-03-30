@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
 const DB_NAME = 'JapaneseReaderDB';
 const DB_VERSION = 1;
 const AUTH_CHANGE_EVENT = 'wanikani-auth-changed';
+const DATA_CHANGE_EVENT = 'wanikani-data-changed';
 
 // Initialize IndexedDB for large WaniKani data
 function getIndexedDB(): Promise<IDBDatabase> {
@@ -57,18 +58,30 @@ export class StorageService {
     }
   }
 
-  static subscribeToAuthChange(callback: () => void): () => void {
+  private static notifyDataChange(): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(DATA_CHANGE_EVENT));
+    }
+  }
+
+  static subscribeToWaniKaniStateChange(callback: () => void): () => void {
     if (typeof window === 'undefined') {
       return () => {};
     }
 
     window.addEventListener(AUTH_CHANGE_EVENT, callback);
+    window.addEventListener(DATA_CHANGE_EVENT, callback);
     window.addEventListener('storage', callback);
 
     return () => {
       window.removeEventListener(AUTH_CHANGE_EVENT, callback);
+      window.removeEventListener(DATA_CHANGE_EVENT, callback);
       window.removeEventListener('storage', callback);
     };
+  }
+
+  static subscribeToAuthChange(callback: () => void): () => void {
+    return this.subscribeToWaniKaniStateChange(callback);
   }
 
   static setWaniKaniToken(token: string): void {
@@ -123,7 +136,10 @@ export class StorageService {
 
     return new Promise((resolve, reject) => {
       tx.onerror = () => reject(tx.error);
-      tx.oncomplete = () => resolve();
+      tx.oncomplete = () => {
+        this.notifyDataChange();
+        resolve();
+      };
     });
   }
 
@@ -302,7 +318,10 @@ export class StorageService {
 
       return new Promise((resolve, reject) => {
         tx.onerror = () => reject(tx.error);
-        tx.oncomplete = () => resolve();
+        tx.oncomplete = () => {
+          this.notifyDataChange();
+          resolve();
+        };
       });
     } catch {
       // Silently fail if IndexedDB is not available

@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StorageService } from '../services/storage';
-import { WaniKaniService, testWaniKaniConnection } from '../services/wanikani';
+import { syncWaniKaniData } from '../services/wanikani';
 
 export function SetupPage() {
   const navigate = useNavigate();
@@ -9,53 +9,65 @@ export function SetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [userData, setUserData] = useState<any>(null);
+  const syncInProgressRef = useRef(false);
 
-  const handleTestConnection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const runSync = async (rawToken: string) => {
+    const normalizedToken = rawToken.trim();
+    if (!normalizedToken || syncInProgressRef.current) return;
+
+    syncInProgressRef.current = true;
     setLoading(true);
+    setError('');
+
+    console.log('connect/sync start');
 
     try {
-      const normalizedToken = token.trim();
+      StorageService.setWaniKaniToken(normalizedToken);
 
-      const isValid = await testWaniKaniConnection(normalizedToken);
-
-      if (!isValid) {
-        setError('Invalid WaniKani API token. Please check and try again.');
-        setLoading(false);
-        return;
-      }
-
-      // Fetch user data
-      const service = new WaniKaniService(normalizedToken);
-      const user = await service.getUser();
+      const allData = await syncWaniKaniData(normalizedToken);
+      await StorageService.setWaniKaniData(allData);
 
       setUserData({
-        level: user.level,
-        username: user.username,
+        level: allData.user?.level,
+        username: allData.user?.username,
       });
-
-      // Fetch and store all data
-      const allData = await service.fetchAllData();
-      StorageService.setWaniKaniToken(normalizedToken);
-      await StorageService.setWaniKaniData(allData);
 
       setError('');
       navigate('/', { replace: true });
     } catch (err) {
-      setError('Error: ' + (err instanceof Error ? err.message : 'Unknown error'));
+      StorageService.clearWaniKaniToken();
+      await StorageService.clearWaniKaniData();
+
+      setError('Error ' + (err instanceof Error ? err.message : 'Unknown error'));
     } finally {
       setLoading(false);
+      syncInProgressRef.current = false;
     }
   };
 
-  const handleDisconnect = async () => {
-    StorageService.clearWaniKaniToken();
-    await StorageService.clearWaniKaniData();
-    setUserData(null);
-    setToken('');
-    setError('');
-  };  
+  useEffect(() => {
+    const bootstrap = async () => {
+      const existingToken = StorageService.getWaniKaniToken();
+      if (!existingToken) return;
+
+      const isCached = await StorageService.isWaniKaniDataCached();
+      if (isCached) {
+        navigate('/', { replace: true });
+        return;
+      }
+
+      setToken(existingToken);
+      await runSync(existingToken);
+    };
+
+    void bootstrap();
+  }, [navigate]);
+
+  const handleTestConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading || syncInProgressRef.current) return;
+    await runSync(token);
+  };
 
 
   return (
@@ -77,12 +89,6 @@ export function SetupPage() {
               <p className="text-sm text-green-700">
                 Level {userData.level} • {userData.username}
               </p>
-              <button
-                onClick={handleDisconnect}
-                className="mt-3 w-full px-3 py-2 text-sm bg-red-100 text-red-700 hover:bg-red-200 rounded transition-colors"
-              >
-                Disconnect
-              </button>
             </div>
           )}
 
@@ -123,7 +129,7 @@ export function SetupPage() {
               disabled={!token.trim() || loading || !!userData}
               className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Connecting...' : userData ? 'Connected! 🎉' : 'Connect'}
+              {loading ? 'Connecting and syncing...' : userData ? 'Connected! 🎉' : 'Connect'}
             </button>
           </form>
         </div>

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { StorageService } from '../services/storage';
-import { WaniKaniService } from '../services/wanikani';
 import { passages } from '../data/passages';
 import { buildKnowledgeModel, recommendPassage, scorePassage, getPassageScoreReason } from '../lib/recommendation';
 import { ReadingPassage } from '../types';
@@ -26,16 +25,9 @@ export function HomePage() {
         // Get WaniKani data
         let wkData = await StorageService.getWaniKaniData();
         if (!wkData) {
-          // Try to refetch if not cached
-          try {
-            const service = new WaniKaniService(token);
-            wkData = await service.fetchAllData();
-            await StorageService.setWaniKaniData(wkData);
-          } catch (fetchErr) {
-            setError('Could not load WaniKani data. Please reconnect.');
-            setLoading(false);
-            return;
-          }
+          setError('Could not load WaniKani data. Please reconnect.');
+          setLoading(false);
+          return;
         }
 
         // Build knowledge model

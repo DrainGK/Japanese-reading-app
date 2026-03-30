@@ -15,6 +15,27 @@ type APIResponse<T> = { data: T; pages: { next_url: string | null } };
 type AssignmentsResponse = APIResponse<WaniKaniAssignment[]>;
 type ReviewsResponse = APIResponse<WaniKaniReview[]>;
 type SubjectsResponse = APIResponse<WaniKaniSubject[]>;
+const MAX_RETRIES_429 = 3;
+const MEMORY_CACHE_TTL_MS = 5 * 60 * 1000;
+
+const syncInFlightByToken = new Map<string, Promise<WaniKaniData>>();
+const memoryCacheByToken = new Map<string, { data: WaniKaniData; cachedAt: number }>();
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRetryDelayMs(attempt: number, retryAfterHeader: string | null): number {
+  const parsedRetryAfter = Number(retryAfterHeader ?? '');
+  if (!Number.isNaN(parsedRetryAfter) && parsedRetryAfter > 0) {
+    return parsedRetryAfter * 1000;
+  }
+
+  // Exponential backoff with a little jitter to spread retries.
+  const base = 1000 * 2 ** attempt;
+  const jitter = Math.floor(Math.random() * 350);
+  return base + jitter;
+}
 
 function normalizeSubject(subject: WaniKaniSubject): WaniKaniSubject {
   const subjectType = subject.type ?? subject.object;
@@ -43,14 +64,31 @@ export class WaniKaniService {
     const url = trimmed.startsWith('http')
       ? trimmed
       : `${API_BASE}/${trimmed.replace(/^\/+/, '')}`;
-    const response = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${this.apiToken}`,
-        'Wanikani-Revision': '20170710',
-      },
-    });
+    for (let attempt = 0; attempt <= MAX_RETRIES_429; attempt += 1) {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${this.apiToken}`,
+          'Wanikani-Revision': '20170710',
+        },
+      });
 
-    if (!response.ok) {
+      if (response.ok) {
+        const data = await response.json();
+        return data as T;
+      }
+
+      if (response.status === 429 && attempt < MAX_RETRIES_429) {
+        const delayMs = getRetryDelayMs(attempt, response.headers.get('Retry-After'));
+        console.warn('[WaniKani] 429 received, retrying after backoff', {
+          endpoint: url,
+          attempt: attempt + 1,
+          maxAttempts: MAX_RETRIES_429 + 1,
+          delayMs,
+        });
+        await sleep(delayMs);
+        continue;
+      }
+
       const errorBody = await response.text();
 
       if (response.status === 401) {
@@ -68,8 +106,7 @@ export class WaniKaniService {
       );
     }
 
-    const data = await response.json();
-    return data as T;
+    throw new Error('WaniKani API request failed after retry attempts.');
   }
 
   async getUser(): Promise<WaniKaniUser> {
@@ -233,4 +270,40 @@ export async function testWaniKaniConnection(apiToken: string): Promise<boolean>
   } catch {
     return false;
   }
+}
+
+export async function syncWaniKaniData(
+  apiToken: string,
+  options?: { forceRefresh?: boolean }
+): Promise<WaniKaniData> {
+  const normalizedToken = apiToken.trim();
+  if (!normalizedToken) {
+    throw new Error('WaniKani API token is required.');
+  }
+
+  const forceRefresh = options?.forceRefresh ?? false;
+  const now = Date.now();
+  const cached = memoryCacheByToken.get(normalizedToken);
+
+  if (!forceRefresh && cached && now - cached.cachedAt < MEMORY_CACHE_TTL_MS) {
+    return cached.data;
+  }
+
+  const inFlight = syncInFlightByToken.get(normalizedToken);
+  if (inFlight) {
+    console.log('[WaniKani] Reusing in-flight sync request');
+    return inFlight;
+  }
+
+  const syncPromise = (async () => {
+    const service = new WaniKaniService(normalizedToken);
+    const data = await service.fetchAllData();
+    memoryCacheByToken.set(normalizedToken, { data, cachedAt: Date.now() });
+    return data;
+  })().finally(() => {
+    syncInFlightByToken.delete(normalizedToken);
+  });
+
+  syncInFlightByToken.set(normalizedToken, syncPromise);
+  return syncPromise;
 }
