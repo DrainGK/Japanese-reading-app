@@ -162,6 +162,7 @@ export function ReadingPage() {
   const [mode, setMode] = useState<ReadingMode>('study');
   const [showHighlights, setShowHighlights] = useState(true);
   const [selectedWord, setSelectedWord] = useState<PopupWordInfo | null>(null);
+  const [savedVocabularyTokens, setSavedVocabularyTokens] = useState<Set<string>>(new Set());
   const [highlightSets, setHighlightSets] = useState<HighlightSets>({
     kanji: new Set(),
     vocab: new Set(),
@@ -181,6 +182,8 @@ export function ReadingPage() {
       if (!active) return;
 
       setHighlightSets(buildHighlightSets(passage, wkData));
+      const saved = StorageService.getSavedVocabulary();
+      setSavedVocabularyTokens(new Set(saved.map((item) => item.token)));
     };
 
     void loadHighlights();
@@ -226,6 +229,19 @@ export function ReadingPage() {
     navigate('/');
   };
 
+  const handleSaveWord = (word: PopupWordInfo) => {
+    StorageService.saveVocabularyItem({
+      token: word.token,
+      meaning: word.meanings[0] ?? 'No meaning available',
+      readings: word.readings,
+      level: word.level,
+      srsStage: word.srsStage,
+      source: 'reading',
+    });
+
+    setSavedVocabularyTokens((prev) => new Set(prev).add(word.token));
+  };
+
   const minutes = Math.floor(timeElapsed / 60);
   const seconds = timeElapsed % 60;
   const estimatedSeconds = passage.estimatedMinutes * 60;
@@ -243,14 +259,30 @@ export function ReadingPage() {
   return (
     <div className="space-y-5">
       {/* Header with Timer */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={handleBack}
-          className="text-primary-400 hover:text-primary-500 font-medium"
-        >
-          ← Back
-        </button>
-        <div className="flex items-center gap-2">
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <button
+            onClick={handleBack}
+            className="text-primary-400 hover:text-primary-500 font-medium"
+          >
+            ← Back
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={startTimer}
+              className="btn btn-secondary text-sm px-3 py-2"
+            >
+              {session.isTimerRunning ? '⏸' : '⏱'} Timer
+            </button>
+            {session.isTimerRunning && (
+              <div className="text-lg font-mono font-semibold text-primary-400">
+                {minutes}:{seconds.toString().padStart(2, '0')}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center rounded-lg bg-muted p-1">
             <button
               onClick={() => {
@@ -258,7 +290,7 @@ export function ReadingPage() {
                 setShowHighlights(false);
                 setSelectedWord(null);
               }}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 mode === 'reading' ? 'bg-surface text-prose shadow-xs' : 'text-prose-secondary'
               }`}
             >
@@ -269,7 +301,7 @@ export function ReadingPage() {
                 setMode('study');
                 setShowHighlights(true);
               }}
-              className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+              className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 mode === 'study' ? 'bg-surface text-prose shadow-xs' : 'text-prose-secondary'
               }`}
             >
@@ -283,17 +315,6 @@ export function ReadingPage() {
           >
             {showHighlights ? 'Hide Highlights' : 'Show Highlights'}
           </button>
-          <button
-            onClick={startTimer}
-            className="btn btn-secondary text-sm px-3 py-2"
-          >
-            {session.isTimerRunning ? '⏸' : '⏱'} Timer
-          </button>
-          {session.isTimerRunning && (
-            <div className="text-lg font-mono font-semibold text-primary-400">
-              {minutes}:{seconds.toString().padStart(2, '0')}
-            </div>
-          )}
         </div>
       </div>
 
@@ -381,7 +402,12 @@ export function ReadingPage() {
         Use Study mode to tap highlighted words and view WaniKani details.
       </p>
 
-      <WordPopup word={selectedWord} onClose={() => setSelectedWord(null)} />
+      <WordPopup
+        word={selectedWord}
+        onClose={() => setSelectedWord(null)}
+        onSaveWord={handleSaveWord}
+        isSaved={selectedWord ? savedVocabularyTokens.has(selectedWord.token) : false}
+      />
     </div>
   );
 }

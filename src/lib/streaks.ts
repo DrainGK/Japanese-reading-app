@@ -1,11 +1,11 @@
 // Milestone definitions for streak achievements
 export const MILESTONES: Record<number, string> = {
-  3: "3 jours 🌱",
-  7: "Une semaine 🗓",
-  14: "Deux semaines 💪",
-  30: "Un mois 🏅",
-  60: "Deux mois ⚡",
-  100: "100 jours 🔱",
+  3: '3 days 🌱',
+  7: 'One week 🗓',
+  14: 'Two weeks 💪',
+  30: 'One month 🏅',
+  60: 'Two months ⚡',
+  100: '100 days 🔱',
 };
 
 export function getMilestone(streak: number): string | null {

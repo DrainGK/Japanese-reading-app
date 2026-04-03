@@ -12,6 +12,8 @@ export type PopupWordInfo = {
 type WordPopupProps = {
   word: PopupWordInfo | null;
   onClose: () => void;
+  onSaveWord?: (word: PopupWordInfo) => void;
+  isSaved?: boolean;
 };
 
 function getSrsStageLabel(stage?: number): string {
@@ -24,7 +26,7 @@ function getSrsStageLabel(stage?: number): string {
   return 'Unspecified SRS';
 }
 
-export function WordPopup({ word, onClose }: WordPopupProps) {
+export function WordPopup({ word, onClose, onSaveWord, isSaved = false }: WordPopupProps) {
   if (!word) return null;
 
   return (
@@ -69,6 +71,22 @@ export function WordPopup({ word, onClose }: WordPopupProps) {
           )}
           <span className="badge bg-muted text-prose-secondary">{getSrsStageLabel(word.srsStage)}</span>
         </div>
+
+        {word.type === 'vocab' && onSaveWord && (
+          <div className="mt-4">
+            <button
+              onClick={() => onSaveWord(word)}
+              disabled={isSaved}
+              className={`w-full rounded-xl px-4 py-2.5 text-sm font-medium transition-colors ${
+                isSaved
+                  ? 'bg-success-100 text-success-600 cursor-not-allowed'
+                  : 'bg-primary-400 text-prose-inverse hover:bg-primary-500'
+              }`}
+            >
+              {isSaved ? 'Saved to Vocabulary' : 'Save to Vocabulary'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

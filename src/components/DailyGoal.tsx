@@ -19,7 +19,7 @@ export function DailyGoal({ dailyGoal, todaySessions }: DailyGoalProps) {
         ))}
       </div>
       <span className="text-sm text-prose-secondary">
-        {isDone ? 'Daily goal completed! 🎯' : `${todaySessions}/${dailyGoal} passed`}
+        {isDone ? 'Daily goal completed! 🎯' : `${todaySessions}/${dailyGoal} sessions today`}
       </span>
     </div>
   );

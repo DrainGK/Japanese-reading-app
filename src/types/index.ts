@@ -101,6 +101,21 @@ export interface SessionStats {
   lastCompletedDate?: string;
 }
 
+export interface SavedVocabularyItem {
+  id: string;
+  token: string;
+  meaning: string;
+  readings: string[];
+  level?: number;
+  srsStage?: number;
+  source: 'reading' | 'manual';
+  createdAt: string;
+}
+
+export interface UserPreferences {
+  dailyGoal: 1 | 2 | 3;
+}
+
 export interface WaniKaniData {
   user: WaniKaniUser | null;
   assignments: WaniKaniAssignment[];

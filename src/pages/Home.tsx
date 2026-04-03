@@ -7,13 +7,14 @@ import { WelcomeBanner } from '../components/WelcomeBanner';
 import { StatsRow } from '../components/StatsRow';
 import { StreakHero } from '../components/StreakHero';
 import { DailyGoal } from '../components/DailyGoal';
-import { ReadingPassage } from '../types';
+import { ReadingPassage, ReadingSession } from '../types';
 
 export function HomePage() {
   const navigate = useNavigate();
   const [todayPassage, setTodayPassage] = useState<ReadingPassage | null>(null);
-  const [sessions, setSessions] = useState<any[]>([]);
+  const [sessions, setSessions] = useState<ReadingSession[]>([]);
   const [stats, setStats] = useState({ totalSessions: 0, averageScore: 0, currentStreak: 0 });
+  const [dailyGoal, setDailyGoal] = useState<1 | 2 | 3>(1);
   const [scoreReason, setScoreReason] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,8 +65,10 @@ export function HomePage() {
         // Get stats
         const sessionStats = StorageService.getSessionStats();
         const allSessions = StorageService.getSessions();
+        const prefs = StorageService.getUserPreferences();
         setSessions(allSessions);
         setStats(sessionStats);
+        setDailyGoal(prefs.dailyGoal);
 
         setLoading(false);
       } catch (err) {
@@ -96,8 +99,12 @@ export function HomePage() {
 
   const hasHistory = sessions.length > 0;
   const todayDate = new Date().toISOString().split('T')[0];
-  const todaySessions = sessions.filter((s) => s.date === todayDate).length;
-  const dailyGoal = 1; // Can be made configurable in Sprint 4
+  const todaySessions = sessions.filter((s) => s.date.split('T')[0] === todayDate).length;
+
+  const handleDailyGoalChange = (goal: 1 | 2 | 3) => {
+    setDailyGoal(goal);
+    StorageService.setDailyGoal(goal);
+  };
 
   return (
     <div className="space-y-6">
@@ -119,6 +126,26 @@ export function HomePage() {
       {hasHistory ? (
         <>
           <StreakHero streak={stats.currentStreak} hasReadToday={todaySessions > 0} />
+
+          <div className="card">
+            <p className="text-sm font-medium text-prose mb-2">Daily Goal</p>
+            <div className="flex gap-2">
+              {[1, 2, 3].map((goal) => (
+                <button
+                  key={goal}
+                  onClick={() => handleDailyGoalChange(goal as 1 | 2 | 3)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                    dailyGoal === goal
+                      ? 'bg-primary-400 text-prose-inverse'
+                      : 'bg-muted text-prose-secondary hover:bg-hover'
+                  }`}
+                >
+                  {goal}/day
+                </button>
+              ))}
+            </div>
+          </div>
+
           <StatsRow
             streak={stats.currentStreak}
             sessions={stats.totalSessions}

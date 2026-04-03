@@ -15,7 +15,7 @@ export function StreakHero({ streak, hasReadToday }: StreakHeroProps) {
         {streak}
       </span>
       <p className="text-sm font-medium text-warning-600">
-        {streak === 1 ? 'day streak' : 'day streak'} 🔥
+        {streak === 1 ? 'day streak' : 'days streak'} 🔥
       </p>
 
       {milestone && (
@@ -26,7 +26,7 @@ export function StreakHero({ streak, hasReadToday }: StreakHeroProps) {
 
       {nextMilestone && !milestone && (
         <p className="text-xs text-warning-600 mt-3">
-          {nextMilestone.target - streak} more days until {nextMilestone.label.split(' ')[0]}
+          {nextMilestone.target - streak} days to milestone: {nextMilestone.label}
         </p>
       )}
 

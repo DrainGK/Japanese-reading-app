@@ -12,10 +12,10 @@ export function StatsRow({ streak, sessions, avgScore, hasReadToday }: StatsRowP
       <div className="card">
         <div className="text-3xl font-semibold text-warning-500">{streak}</div>
         <p className="text-prose-secondary text-sm mt-1">
-          {streak === 1 ? 'Day Streak' : 'Day Streak'} 🔥
+          {streak === 1 ? 'Day streak' : 'Days streak'} 🔥
         </p>
         {!hasReadToday && (
-          <p className="text-2xs text-warning-500 mt-2 animate-pulse-soft mt-3">
+          <p className="text-2xs text-warning-500 animate-pulse-soft mt-3">
             Read today to keep going
           </p>
         )}

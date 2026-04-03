@@ -1,4 +1,11 @@
-import { WaniKaniData, ReadingSession, SessionStats, WaniKaniSubject } from '../types';
+import {
+  WaniKaniData,
+  ReadingSession,
+  SessionStats,
+  WaniKaniSubject,
+  SavedVocabularyItem,
+  UserPreferences,
+} from '../types';
 
 const STORAGE_KEYS = {
   WK_TOKEN: 'wk_token',
@@ -6,6 +13,8 @@ const STORAGE_KEYS = {
   SESSIONS: 'reading_sessions',
   CURRENT_SESSION: 'current_session',
   LAST_SESSION_DATE: 'last_session_date',
+  SAVED_VOCABULARY: 'saved_vocabulary',
+  USER_PREFERENCES: 'user_preferences',
 };
 
 const DB_NAME = 'JapaneseReaderDB';
@@ -294,6 +303,87 @@ export class StorageService {
   static getCompletedPassageIds(): Set<string> {
     const sessions = this.getSessions();
     return new Set(sessions.map((s) => s.passageId));
+  }
+
+  static getSavedVocabulary(): SavedVocabularyItem[] {
+    const stored = localStorage.getItem(STORAGE_KEYS.SAVED_VOCABULARY);
+    if (!stored) return [];
+
+    try {
+      const parsed = JSON.parse(stored) as SavedVocabularyItem[];
+      return parsed.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    } catch {
+      return [];
+    }
+  }
+
+  static saveVocabularyItem(item: Omit<SavedVocabularyItem, 'id' | 'createdAt'>): SavedVocabularyItem {
+    const existing = this.getSavedVocabulary();
+    const duplicate = existing.find((entry) => entry.token === item.token);
+    if (duplicate) {
+      return duplicate;
+    }
+
+    const saved: SavedVocabularyItem = {
+      ...item,
+      id: `${Date.now()}-${item.token}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    localStorage.setItem(STORAGE_KEYS.SAVED_VOCABULARY, JSON.stringify([saved, ...existing]));
+    return saved;
+  }
+
+  static removeSavedVocabulary(token: string): void {
+    const existing = this.getSavedVocabulary();
+    const next = existing.filter((item) => item.token !== token);
+    localStorage.setItem(STORAGE_KEYS.SAVED_VOCABULARY, JSON.stringify(next));
+  }
+
+  static isVocabularySaved(token: string): boolean {
+    return this.getSavedVocabulary().some((item) => item.token === token);
+  }
+
+  static exportSavedVocabularyAsAnkiTsv(): string {
+    const saved = this.getSavedVocabulary();
+    const header = 'Front\tBack\tReading\tLevel\tSRS';
+    const rows = saved.map((item) => {
+      const front = item.token.replace(/\t/g, ' ');
+      const back = item.meaning.replace(/\t/g, ' ');
+      const reading = item.readings.join(' / ').replace(/\t/g, ' ');
+      const level = typeof item.level === 'number' ? String(item.level) : '';
+      const srs = typeof item.srsStage === 'number' ? String(item.srsStage) : '';
+      return `${front}\t${back}\t${reading}\t${level}\t${srs}`;
+    });
+
+    return [header, ...rows].join('\n');
+  }
+
+  static getUserPreferences(): UserPreferences {
+    const stored = localStorage.getItem(STORAGE_KEYS.USER_PREFERENCES);
+    if (!stored) {
+      return { dailyGoal: 1 };
+    }
+
+    try {
+      const parsed = JSON.parse(stored) as Partial<UserPreferences>;
+      const goal = parsed.dailyGoal;
+      if (goal === 1 || goal === 2 || goal === 3) {
+        return { dailyGoal: goal };
+      }
+      return { dailyGoal: 1 };
+    } catch {
+      return { dailyGoal: 1 };
+    }
+  }
+
+  static setDailyGoal(goal: 1 | 2 | 3): void {
+    const current = this.getUserPreferences();
+    const next: UserPreferences = {
+      ...current,
+      dailyGoal: goal,
+    };
+    localStorage.setItem(STORAGE_KEYS.USER_PREFERENCES, JSON.stringify(next));
   }
 
   static hasCompletedToday(): boolean {
