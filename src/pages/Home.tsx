@@ -3,11 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { StorageService } from '../services/storage';
 import { passages } from '../data/passages';
 import { buildKnowledgeModel, recommendPassage, scorePassage, getPassageScoreReason } from '../lib/recommendation';
+import { WelcomeBanner } from '../components/WelcomeBanner';
+import { StatsRow } from '../components/StatsRow';
+import { StreakHero } from '../components/StreakHero';
+import { DailyGoal } from '../components/DailyGoal';
+import { isToday } from '../lib/streaks';
 import { ReadingPassage } from '../types';
 
 export function HomePage() {
   const navigate = useNavigate();
   const [todayPassage, setTodayPassage] = useState<ReadingPassage | null>(null);
+  const [sessions, setSessions] = useState<any[]>([]);
   const [stats, setStats] = useState({ totalSessions: 0, averageScore: 0, currentStreak: 0 });
   const [scoreReason, setScoreReason] = useState('');
   const [loading, setLoading] = useState(true);
@@ -58,6 +64,8 @@ export function HomePage() {
 
         // Get stats
         const sessionStats = StorageService.getSessionStats();
+        const allSessions = StorageService.getSessions();
+        setSessions(allSessions);
         setStats(sessionStats);
 
         setLoading(false);
@@ -72,10 +80,10 @@ export function HomePage() {
 
   if (loading) {
     return (
-      <div className="container max-w-4xl mx-auto py-12 flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-gray-600">Loading your reading...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-400"></div>
+          <p className="mt-4 text-prose-secondary">Loading your reading...</p>
         </div>
       </div>
     );
@@ -87,73 +95,69 @@ export function HomePage() {
     navigate('/setup');
   };
 
+  const hasHistory = sessions.length > 0;
+  const todayDate = new Date().toISOString().split('T')[0];
+  const todaySessions = sessions.filter((s) => s.date === todayDate).length;
+  const dailyGoal = 1; // Can be made configurable in Sprint 4
+
   return (
-    <div className="container max-w-4xl mx-auto py-6 px-4">
-      {/* Header */}
-      <div className="mb-8 flex justify-between items-start">
+    <div className="space-y-6">
+      {/* Header with Sign Out */}
+      <div className="flex justify-between items-start">
         <div>
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">N2 Reader</h1>
-          <p className="text-gray-600">Today's Reading Practice</p>
+          <h1 className="text-2xl font-semibold text-prose">N2 Reader</h1>
+          <p className="text-prose-secondary text-sm">Daily Japanese reading</p>
         </div>
         <button
           onClick={handleSignOut}
-          className="px-4 py-2 text-sm text-gray-600 hover:text-red-600 bg-gray-100 hover:bg-red-50 rounded transition-colors"
+          className="text-2xs text-prose-secondary hover:text-prose px-3 py-1.5 rounded hover:bg-muted transition-colors"
         >
           Sign Out
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-        <div className="card">
-          <div className="text-3xl font-bold text-indigo-600">{stats.currentStreak}</div>
-          <p className="text-gray-600 text-sm">Day Streak 🔥</p>
-        </div>
-        <div className="card">
-          <div className="text-3xl font-bold text-green-600">{stats.totalSessions}</div>
-          <p className="text-gray-600 text-sm">Sessions</p>
-        </div>
-        <div className="card">
-          <div className="text-3xl font-bold text-blue-600">{stats.averageScore.toFixed(1)}%</div>
-          <p className="text-gray-600 text-sm">Average Score</p>
-        </div>
-      </div>
+      {/* Welcome Banner or Stats */}
+      {hasHistory ? (
+        <>
+          <StreakHero streak={stats.currentStreak} hasReadToday={todaySessions > 0} />
+          <StatsRow
+            streak={stats.currentStreak}
+            sessions={stats.totalSessions}
+            avgScore={stats.averageScore}
+            hasReadToday={todaySessions > 0}
+          />
+          <DailyGoal dailyGoal={dailyGoal} todaySessions={todaySessions} />
+        </>
+      ) : (
+        <WelcomeBanner />
+      )}
 
       {/* Today's Passage */}
       {todayPassage ? (
-        <div className="card mb-8">
-          <div className="mb-6">
-            <span className="inline-block px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-700 mb-3">
-              {todayPassage.theme}
-            </span>
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">{todayPassage.title}</h2>
-            <p className="text-gray-600 mb-4">{todayPassage.summary}</p>
+        <div className="card space-y-4">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="badge badge-primary">{todayPassage.theme}</span>
+            </div>
+            <h2 className="text-xl font-semibold text-prose mb-2">{todayPassage.title}</h2>
+            <p className="text-prose-secondary text-sm mb-4">{todayPassage.summary}</p>
 
-            <div className="flex flex-wrap gap-4 mb-6 text-sm">
-              <div className="flex items-center text-gray-700">
-                <span className="font-medium mr-2">Difficulty:</span>
-                <span className="capitalize px-3 py-1 rounded bg-gray-100">
-                  {todayPassage.difficulty}
-                </span>
+            <div className="flex flex-wrap gap-2 mb-4 text-xs">
+              <div className="px-2.5 py-1 rounded bg-muted text-prose-secondary">
+                Difficulty: {todayPassage.difficulty}
               </div>
-              <div className="flex items-center text-gray-700">
-                <span className="font-medium mr-2">Time:</span>
-                <span className="px-3 py-1 rounded bg-gray-100">
-                  ~{todayPassage.estimatedMinutes} min
-                </span>
+              <div className="px-2.5 py-1 rounded bg-muted text-prose-secondary">
+                ~{todayPassage.estimatedMinutes} min
               </div>
-              <div className="flex items-center text-gray-700">
-                <span className="font-medium mr-2">Source:</span>
-                <span className="px-3 py-1 rounded bg-gray-100 capitalize">
-                  {todayPassage.source ?? 'local'}
-                </span>
+              <div className="px-2.5 py-1 rounded bg-muted text-prose-secondary">
+                {todayPassage.source ?? 'Local'}
               </div>
             </div>
 
             {scoreReason && (
-              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200 mb-6">
-                <p className="text-sm text-blue-800">
-                  <span className="font-medium">Recommended because:</span> {scoreReason}
+              <div className="p-3 rounded-lg bg-primary-50 border border-primary-100">
+                <p className="text-xs text-primary-700">
+                  <span className="font-medium">Recommended:</span> {scoreReason}
                 </p>
               </div>
             )}
@@ -167,12 +171,12 @@ export function HomePage() {
           </button>
         </div>
       ) : error ? (
-        <div className="card bg-amber-50 border border-amber-200">
-          <p className="text-amber-800 text-center py-4">{error}</p>
+        <div className="card bg-warning-50 border border-warning-100">
+          <p className="text-warning-700 text-center py-4 text-sm">{error}</p>
           {error.includes('reconnect') && (
             <button
               onClick={handleSignOut}
-              className="mt-4 w-full px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 transition-colors"
+              className="mt-4 w-full px-4 py-2 bg-warning-500 text-prose-inverse rounded-lg hover:bg-warning-600 transition-colors text-sm font-medium"
             >
               Reconnect to WaniKani
             </button>
@@ -180,19 +184,13 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {/* Navigation to History */}
-      <div className="text-center mt-8 flex flex-wrap justify-center gap-3">
-        <button
-          onClick={() => navigate('/texts')}
-          className="btn btn-primary"
-        >
+      {/* Navigation Buttons */}
+      <div className="flex gap-3">
+        <button onClick={() => navigate('/texts')} className="btn btn-primary flex-1">
           Browse Texts →
         </button>
-        <button
-          onClick={() => navigate('/history')}
-          className="btn btn-secondary"
-        >
-          View History →
+        <button onClick={() => navigate('/history')} className="btn btn-secondary flex-1">
+          History
         </button>
       </div>
     </div>

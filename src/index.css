@@ -2,68 +2,171 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Custom styles for Japanese text */
+/* ===== KEYFRAME ANIMATIONS ===== */
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pop {
+  0% {
+    transform: scale(0.85);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.75;
+  }
+}
+
+/* ===== ANIMATION UTILITIES ===== */
+
+.animate-fade-up {
+  animation: fade-up 0.25s ease-out forwards;
+}
+
+.animate-pop {
+  animation: pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-pulse-soft {
+  animation: pulse-soft 2s ease-in-out infinite;
+}
+
+.stagger-1 {
+  animation-delay: 0.05s;
+}
+
+.stagger-2 {
+  animation-delay: 0.1s;
+}
+
+.stagger-3 {
+  animation-delay: 0.15s;
+}
+
+/* ===== GLOBAL STYLES ===== */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-base font-sans text-prose;
+  }
+}
+
+/* ===== JAPANESE TEXT ===== */
+
+.japanese-text {
+  @apply font-jp leading-loose;
+  font-size: 1.125rem;
+  line-height: 1.8;
+}
+
+.font-jp {
+  font-family: "Noto Sans JP", sans-serif;
+}
+
+/* ===== COMPONENT LAYERS ===== */
+
 @layer components {
-  .japanese-text {
-    @apply font-sans leading-relaxed;
-    font-size: 1.125rem;
-    line-height: 1.8;
-  }
-
-  .japanese-heading {
-    @apply text-2xl font-semibold mb-4;
-  }
-
+  /* Cards */
   .card {
-    @apply bg-white rounded-lg shadow-md p-6 transition-shadow;
+    @apply bg-surface rounded-xl shadow-sm border border-stroke-subtle p-5 transition-all;
   }
 
   .card:hover {
-    @apply shadow-lg;
+    @apply shadow-md border-stroke-default;
   }
 
+  .card-interactive {
+    @apply cursor-pointer hover:shadow-md hover:border-stroke-default active:scale-[0.99];
+  }
+
+  /* Buttons */
   .btn {
-    @apply px-6 py-3 rounded-lg font-medium transition-colors;
+    @apply inline-flex items-center justify-center font-medium transition-all duration-150 rounded-xl;
   }
 
   .btn-primary {
-    @apply bg-indigo-600 text-white hover:bg-indigo-700;
+    @apply bg-primary-400 text-prose-inverse py-3.5 px-6 shadow-primary hover:bg-primary-500 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed;
   }
 
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+    @apply bg-muted text-prose py-3.5 px-6 border border-stroke-subtle hover:bg-hover active:scale-[0.98];
   }
 
-  .btn-success {
-    @apply bg-green-600 text-white hover:bg-green-700;
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
   }
 
-  .btn-danger {
-    @apply bg-red-600 text-white hover:bg-red-700;
-  }
-
+  /* Input fields */
   .input-field {
-    @apply w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500;
+    @apply w-full bg-muted border border-stroke-subtle rounded-lg px-4 py-3 text-base text-prose placeholder:text-prose-muted transition-all duration-150 hover:border-stroke-default focus:outline-none focus:border-primary-400 focus:ring-2 focus:ring-primary-100;
   }
 
-  .progress-item {
-    @apply flex items-center justify-between p-3 rounded-lg bg-gray-50;
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
+  }
+
+  .badge-primary {
+    @apply bg-primary-50 text-primary-600;
+  }
+
+  .badge-success {
+    @apply bg-success-50 text-success-600;
+  }
+
+  .badge-kanji {
+    @apply bg-kanji-bg text-kanji-text border border-kanji-border;
+  }
+
+  .badge-vocab {
+    @apply bg-vocab-bg text-vocab-text border border-vocab-border;
+  }
+
+  /* Highlights */
+  .highlight-kanji {
+    @apply bg-kanji-bg text-prose rounded px-0.5 border-b-2 border-kanji-text cursor-pointer transition-colors duration-100 hover:bg-kanji-text/15;
+  }
+
+  .highlight-vocab {
+    @apply bg-vocab-bg text-prose rounded px-0.5 border-b-2 border-vocab-text cursor-pointer transition-colors duration-100 hover:bg-vocab-text/15;
   }
 }
 
-body {
-  font-family: system-ui, -apple-system, sans-serif;
-  background-color: #f9fafb;
-}
+/* ===== MOBILE SAFE AREA ===== */
 
-/* Mobile-first responsive design */
-@media (max-width: 640px) {
-  .container {
-    @apply px-4 py-4;
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
   }
 
-  .japanese-text {
-    font-size: 1rem;
-    line-height: 1.7;
+  .safe-area-pb {
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
   }
 }

@@ -636,22 +636,23 @@ export function TextsPage() {
   };
 
   return (
-    <div className="container max-w-5xl mx-auto py-6 px-4 pb-24 md:pb-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-800">Texts</h1>
-        <p className="text-gray-600">
-          Browse texts with genre, text level, assignment filters, review filters, and kanji match coverage.
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold text-prose">Texts</h1>
+        <p className="text-prose-secondary text-sm">
+          Browse texts by genre, level, and your WaniKani progress
         </p>
       </div>
 
-      <div className="card mb-6 space-y-5">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <label className="text-sm text-gray-700">
+      <div className="card space-y-5">
+        {/* Basic Filters */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="text-sm font-medium text-prose">
             Genre
             <select
               value={genre}
               onChange={(e) => setGenre(e.target.value)}
-              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2"
+              className="mt-1.5 input-field"
             >
               {genreOptions.map((option) => (
                 <option key={option} value={option}>
@@ -661,12 +662,12 @@ export function TextsPage() {
             </select>
           </label>
 
-          <label className="text-sm text-gray-700">
+          <label className="text-sm font-medium text-prose">
             Source
             <select
               value={source}
               onChange={(e) => setSource(e.target.value as 'all' | 'local' | 'aozora')}
-              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2"
+              className="mt-1.5 input-field"
             >
               {sourceOptions.map((option) => (
                 <option key={option} value={option}>
@@ -676,12 +677,12 @@ export function TextsPage() {
             </select>
           </label>
 
-          <label className="text-sm text-gray-700">
-            Text Level
+          <label className="text-sm font-medium text-prose">
+            Difficulty
             <select
               value={textLevel}
               onChange={(e) => setTextLevel(e.target.value as 'all' | ReadingPassage['difficulty'])}
-              className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2"
+              className="mt-1.5 input-field"
             >
               {textLevelOptions.map((option) => (
                 <option key={option} value={option}>
@@ -692,62 +693,68 @@ export function TextsPage() {
           </label>
         </div>
 
+        {/* WaniKani Filter Tabs */}
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-700">WaniKani Filter</p>
+          <p className="mb-2 text-sm font-medium text-prose">WaniKani Content</p>
           <div className="flex flex-wrap gap-2">
             {filterModes.map((mode) => (
               <button
                 key={mode}
                 onClick={() => setFilterMode(mode)}
-                className={`rounded px-3 py-2 text-sm font-medium ${
-                  filterMode === mode ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'
+                className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  filterMode === mode
+                    ? 'bg-primary-400 text-prose-inverse'
+                    : 'bg-muted text-prose hover:bg-hover'
                 }`}
               >
-                {mode === 'all' ? 'All' : mode === 'assignments' ? 'Assignments' : 'Reviews'}
+                {mode === 'all' ? 'All Text' : mode === 'assignments' ? 'Unlocked' : 'Reviewed'}
               </button>
             ))}
           </div>
         </div>
 
+        {/* Advanced Filters - shown when assignments filter is active */}
         {filterMode === 'assignments' && (
-          <div className="space-y-4 border-t border-gray-200 pt-4">
+          <div className="space-y-4 border-t border-stroke-subtle pt-4">
             <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">Assignment Type</p>
+              <p className="mb-2 text-sm font-medium text-prose">Type</p>
               <div className="flex flex-wrap gap-2">
                 {assignmentKinds.map((kind) => (
                   <button
                     key={kind}
                     onClick={() => setAssignmentKind(kind)}
-                    className={`rounded px-3 py-2 text-sm font-medium ${
-                      assignmentKind === kind ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                      assignmentKind === kind
+                        ? 'bg-primary-400 text-prose-inverse'
+                        : 'bg-muted text-prose hover:bg-hover'
                     }`}
                   >
-                    {kind === 'kanji' ? 'Kanjis' : 'Vocabulary'}
+                    {kind === 'kanji' ? 'Kanji' : 'Vocabulary'}
                   </button>
                 ))}
               </div>
             </div>
 
             <div>
-              <p className="mb-2 text-sm font-medium text-gray-700">Level Filter</p>
-              <div className="mb-3">
-                <button
-                  onClick={handleCurrentLevelClick}
-                  className={`rounded px-3 py-2 text-sm font-medium ${
-                    useCurrentLevel ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-700'
-                  }`}
-                >
-                  Current Level
-                </button>
-              </div>
+              <p className="mb-2 text-sm font-medium text-prose">Level</p>
+              <button
+                onClick={handleCurrentLevelClick}
+                className={`mb-3 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  useCurrentLevel
+                    ? 'bg-primary-400 text-prose-inverse'
+                    : 'bg-muted text-prose hover:bg-hover'
+                }`}
+              >
+                Current Level
+              </button>
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                <label className="text-sm text-gray-700">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <label className="text-sm font-medium text-prose">
                   More Than
                   <select
                     value={moreThanLevel}
                     onChange={(e) => handleMoreThanChange(e.target.value as LevelSelectValue)}
-                    className="mt-1 w-full rounded border border-gray-300 bg-white px-3 py-2"
+                    className="mt-1.5 input-field"
                   >
                     <option value="">Off</option>
                     {allUnlockedLevels.map((level) => (

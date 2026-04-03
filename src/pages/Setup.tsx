@@ -71,36 +71,75 @@ export function SetupPage() {
 
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-blue-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-base flex flex-col items-center justify-center px-4 py-6">
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">N2 Reader</h1>
-          <p className="text-gray-600">Daily Japanese Reading Practice</p>
+          <h1 className="text-3xl font-semibold text-prose mb-2">N2 Reader</h1>
+          <p className="text-prose-secondary text-sm">Learn Japanese with your WaniKani level</p>
         </div>
 
-        {/* Setup Card */}
-        <div className="card mb-6">
-          <h2 className="text-xl font-semibold mb-6 text-gray-800">Connect WaniKani</h2>
+        {/* Steps/How it Works - BEFORE the form */}
+        <div className="space-y-3 mb-8">
+          <div className="card space-y-2">
+            <div className="flex gap-3">
+              <span className="text-2xl">📊</span>
+              <div>
+                <p className="text-sm font-medium text-prose">Reads your WaniKani progress</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="card space-y-2">
+            <div className="flex gap-3">
+              <span className="text-2xl">📖</span>
+              <div>
+                <p className="text-sm font-medium text-prose">Recommends texts at your exact level</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card space-y-2">
+            <div className="flex gap-3">
+              <span className="text-2xl">🔥</span>
+              <div>
+                <p className="text-sm font-medium text-prose">Tracks your daily reading streak</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="card space-y-2">
+            <div className="flex gap-3">
+              <span className="text-2xl">📡</span>
+              <div>
+                <p className="text-sm font-medium text-prose">Works completely offline</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Setup Form Card */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-prose mb-4">Connect WaniKani</h2>
 
           {userData && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-green-800 font-medium mb-1">✓ Connected!</p>
-              <p className="text-sm text-green-700">
+            <div className="mb-4 p-3 bg-success-50 border border-success-100 rounded-lg animate-fade-up">
+              <p className="text-success-600 font-medium text-sm mb-1">✓ Connected!</p>
+              <p className="text-xs text-success-600">
                 Level {userData.level} • {userData.username}
               </p>
             </div>
           )}
 
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <p className="text-red-800 text-sm">{error}</p>
+            <div className="mb-4 p-3 bg-danger-50 border border-danger-100 rounded-lg">
+              <p className="text-danger-600 text-xs">{error}</p>
             </div>
           )}
 
           <form onSubmit={handleTestConnection}>
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-prose mb-2">
                 WaniKani API Token
               </label>
               <input
@@ -111,13 +150,13 @@ export function SetupPage() {
                 className="input-field"
                 disabled={loading || !!userData}
               />
-              <p className="text-xs text-gray-500 mt-2">
+              <p className="text-xs text-prose-muted mt-2">
                 Get your token at{' '}
                 <a
                   href="https://wanikani.com/settings/personal_access_tokens"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-indigo-600 hover:underline"
+                  className="text-primary-400 hover:underline font-medium"
                 >
                   wanikani.com/settings
                 </a>
@@ -127,22 +166,11 @@ export function SetupPage() {
             <button
               type="submit"
               disabled={!token.trim() || loading || !!userData}
-              className="btn btn-primary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-primary w-full disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {loading ? 'Connecting and syncing...' : userData ? 'Connected! 🎉' : 'Connect'}
+              {loading ? 'Connecting...' : userData ? 'Connected! 🎉' : 'Connect to WaniKani'}
             </button>
           </form>
-        </div>
-
-        {/* Info Card */}
-        <div className="card bg-indigo-50 border border-indigo-200">
-          <h3 className="font-semibold text-indigo-900 mb-3">How it works:</h3>
-          <ul className="text-sm text-indigo-800 space-y-2">
-            <li>✓ Reads your WaniKani progress</li>
-            <li>✓ Recommends reading passages based on your level</li>
-            <li>✓ Tracks your reading streak and scores</li>
-            <li>✓ Works completely offline after setup</li>
-          </ul>
         </div>
       </div>
     </div>

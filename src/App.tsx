@@ -14,6 +14,15 @@ import { ResultsPage } from './pages/Results';
 import { HistoryPage } from './pages/History';
 import './index.css';
 
+// Layout wrapper for pages with navbar
+function PageLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="max-w-lg mx-auto px-4 pt-6 pb-24">
+      {children}
+    </div>
+  );
+}
+
 function App() {
   const [loading, setLoading] = useState(true);
   const [isSetup, setIsSetup] = useState(false);
@@ -44,10 +53,10 @@ function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-base flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-          <p className="mt-4 text-gray-600">Loading N2 Reader...</p>
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-400"></div>
+          <p className="mt-4 text-prose-secondary">Loading N2 Reader...</p>
         </div>
       </div>
     );
@@ -55,20 +64,20 @@ function App() {
 
   return (
     <Router>
-      <div className={`min-h-screen bg-gray-50 ${isSetup ? 'pb-20 md:pb-0' : ''}`}>
+      <div className="min-h-screen bg-base">
         {isSetup && <NavBar />}
         <Routes>
           {isSetup ? (
             <>
-              <Route path="/" element={<HomePage />} />
-              <Route path="/texts" element={<TextsPage />} />
-              <Route path="/kanji" element={<KanjiPage />} />
-              <Route path="/vocabulary" element={<VocabularyPage />} />
-              <Route path="/user" element={<UserPage />} />
-              <Route path="/reading/:id" element={<ReadingPage />} />
-              <Route path="/questions/:id" element={<QuestionsPage />} />
-              <Route path="/results/:id" element={<ResultsPage />} />
-              <Route path="/history" element={<HistoryPage />} />
+              <Route path="/" element={<PageLayout><HomePage /></PageLayout>} />
+              <Route path="/texts" element={<PageLayout><TextsPage /></PageLayout>} />
+              <Route path="/kanji" element={<PageLayout><KanjiPage /></PageLayout>} />
+              <Route path="/vocabulary" element={<PageLayout><VocabularyPage /></PageLayout>} />
+              <Route path="/user" element={<PageLayout><UserPage /></PageLayout>} />
+              <Route path="/reading/:id" element={<PageLayout><ReadingPage /></PageLayout>} />
+              <Route path="/questions/:id" element={<PageLayout><QuestionsPage /></PageLayout>} />
+              <Route path="/results/:id" element={<PageLayout><ResultsPage /></PageLayout>} />
+              <Route path="/history" element={<PageLayout><HistoryPage /></PageLayout>} />
               <Route path="/setup" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" />} />
             </>

@@ -20,7 +20,7 @@ TARGET_PASSAGES = 2000
 # ===== PASSAGE SPLIT =====
 MIN_CHARS = 280
 TARGET_CHARS = 850
-MAX_CHARS = 1100
+MAX_CHARS = 1000
 
 MAX_NEWLINES_RATIO = 0.18
 MIN_JAPANESE_CHAR_RATIO = 0.55
@@ -34,6 +34,12 @@ MAX_PASSAGES_PER_AUTHOR = 120
 MAX_PASSAGES_PER_WORK = 24
 MAX_PASSAGES_PER_THEME = 700
 MAX_PASSAGES_PER_DECADE = 500
+
+MAX_PASSAGES_PER_DIFFICULTY = {
+    "easy": 500,
+    "normal": 1100,
+    "hard": 400,
+}
 
 # ===== USER TASTE =====
 FAVORITE_JAPANESE_AUTHORS = {
@@ -232,7 +238,9 @@ def infer_difficulty(text: str) -> str:
     elif char_count > 600:
         score += 1
 
-    if kanji_ratio > 0.22:
+    if kanji_ratio > 0.28:
+        score += 3
+    elif kanji_ratio > 0.22:
         score += 2
     elif kanji_ratio > 0.16:
         score += 1
@@ -242,9 +250,9 @@ def infer_difficulty(text: str) -> str:
     elif avg_sentence_len > 35:
         score += 1
 
-    if score <= 1:
+    if score <= 2:
         return "easy"
-    if score <= 3:
+    if score <= 5:
         return "normal"
     return "hard"
 
@@ -364,12 +372,12 @@ def score_passage(
     score = 0.0
 
     if author == "夏目漱石":
-        score += 14.0
+        score += 10.0
     elif is_favorite_japanese_author(author):
-        score += 9.0
+        score += 6.0
 
     if is_favorite_french_or_euro_author(author):
-        score += 8.0
+        score += 5.0
 
     if writing_type == "modern Japanese orthography":
         score += 7.0
@@ -391,19 +399,21 @@ def score_passage(
     if difficulty == "normal":
         score += 3.0
     elif difficulty == "easy":
-        score += 1.8
+        score += 2.2
     elif difficulty == "hard":
-        score += 1.7
+        score += 1.2
 
     n = len(text)
     if 350 <= n <= 950:
         score += 1.5
-    elif n > 1100:
-        score -= 0.8
+    elif n > 1000:
+        score -= 1.0
 
     kanji_ratio = count_kanji(text) / max(len(text), 1)
-    if kanji_ratio > 0.24:
-        score -= 1.2
+    if kanji_ratio > 0.30:
+        score -= 2.5
+    elif kanji_ratio > 0.24:
+        score -= 1.5
     elif kanji_ratio < 0.10:
         score -= 0.4
 
@@ -462,6 +472,7 @@ def select_diverse_corpus(candidates: list[dict]) -> list[dict]:
     work_counts = Counter()
     theme_counts = Counter()
     decade_counts = Counter()
+    difficulty_counts = Counter()
 
     candidates = sorted(candidates, key=lambda x: x["score"], reverse=True)
 
@@ -470,6 +481,7 @@ def select_diverse_corpus(candidates: list[dict]) -> list[dict]:
         title = item["title"]
         theme = item["theme"]
         decade = item["decade"]
+        difficulty = item["difficulty"]
 
         if author_counts[author] >= MAX_PASSAGES_PER_AUTHOR:
             continue
@@ -479,11 +491,14 @@ def select_diverse_corpus(candidates: list[dict]) -> list[dict]:
             continue
         if decade is not None and decade_counts[decade] >= MAX_PASSAGES_PER_DECADE:
             continue
+        if difficulty_counts[difficulty] >= MAX_PASSAGES_PER_DIFFICULTY[difficulty]:
+            continue
 
         selected.append(item)
         author_counts[author] += 1
         work_counts[title] += 1
         theme_counts[theme] += 1
+        difficulty_counts[difficulty] += 1
         if decade is not None:
             decade_counts[decade] += 1
 
