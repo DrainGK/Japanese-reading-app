@@ -7,7 +7,6 @@ import { WelcomeBanner } from '../components/WelcomeBanner';
 import { StatsRow } from '../components/StatsRow';
 import { StreakHero } from '../components/StreakHero';
 import { DailyGoal } from '../components/DailyGoal';
-import { isToday } from '../lib/streaks';
 import { ReadingPassage } from '../types';
 
 export function HomePage() {
