@@ -108,8 +108,21 @@ export interface SavedVocabularyItem {
   readings: string[];
   level?: number;
   srsStage?: number;
-  source: 'reading' | 'manual';
+  source: 'reading' | 'manual' | 'jisho';
   createdAt: string;
+}
+
+export interface DictionaryWord {
+  id: string;
+  word: string;
+  reading: string;
+  meanings: string[];
+  partsOfSpeech: string[];
+  jlpt: string | null;
+  isCommon: boolean;
+  savedAt: number;
+  sourceTextId: string;
+  sourceTextTitle: string;
 }
 
 export interface UserPreferences {

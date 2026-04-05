@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { DictPopup } from '../components/DictPopup';
+import { PopupWordInfo, WordPopup } from '../components/WordPopup';
 import { passages } from '../data/passages';
 import { useSession } from '../hooks/useSession';
-import { StorageService } from '../services/storage';
-import { ReadingPassage, WaniKaniData, WaniKaniSubject } from '../types';
 import { getMatchingVocabularyTokens } from '../lib/passageMatching';
-import { PopupWordInfo, WordPopup } from '../components/WordPopup';
+import { StorageService } from '../services/storage';
+import { WaniKaniData, WaniKaniSubject } from '../types';
+import { extractWordAt, splitIntoSegments } from '../utils/segmentation';
+import { getTokenizer, hasJapanese, isHiragana, mergeTokens, tokenize, Token } from '../utils/tokenizer';
 
 type HighlightSets = {
   kanji: Set<string>;
@@ -15,6 +18,7 @@ type HighlightSets = {
 };
 
 type ReadingMode = 'reading' | 'study';
+type TokenKind = 'wk-kanji' | 'wk-vocab' | 'unknown-jp' | 'plain';
 
 function toPopupInfo(subject: WaniKaniSubject, srsStage?: number): PopupWordInfo {
   return {
@@ -27,14 +31,18 @@ function toPopupInfo(subject: WaniKaniSubject, srsStage?: number): PopupWordInfo
   };
 }
 
-function buildHighlightSets(passage: ReadingPassage, data: WaniKaniData | null): HighlightSets {
+function createEmptyHighlightSets(): HighlightSets {
+  return {
+    kanji: new Set(),
+    vocab: new Set(),
+    kanjiInfo: new Map(),
+    vocabInfo: new Map(),
+  };
+}
+
+function buildHighlightSets(data: WaniKaniData | null): HighlightSets {
   if (!data) {
-    return {
-      kanji: new Set(),
-      vocab: new Set(),
-      kanjiInfo: new Map(),
-      vocabInfo: new Map(),
-    };
+    return createEmptyHighlightSets();
   }
 
   const wkKanji = new Set<string>();
@@ -43,73 +51,225 @@ function buildHighlightSets(passage: ReadingPassage, data: WaniKaniData | null):
   const vocabInfo = new Map<string, PopupWordInfo>();
 
   data.assignments.forEach((assignment) => {
+    if (assignment.data.srs_stage <= 0) {
+      return;
+    }
+
     const subject = data.subjects.get(assignment.data.subject_id);
-    if (!subject) return;
+    if (!subject) {
+      return;
+    }
 
     if (subject.type === 'kanji' && subject.data.characters) {
-      if (passage.kanjiList.includes(subject.data.characters)) {
-        wkKanji.add(subject.data.characters);
-        kanjiInfo.set(subject.data.characters, toPopupInfo(subject, assignment.data.srs_stage));
-      }
+      wkKanji.add(subject.data.characters);
+      kanjiInfo.set(subject.data.characters, toPopupInfo(subject, assignment.data.srs_stage));
       return;
     }
 
     if (subject.type === 'vocabulary' || subject.type === 'kana_vocabulary') {
       const token = subject.data.characters ?? subject.data.slug;
-      if (token) {
-        wkVocab.add(token);
-        vocabInfo.set(token, toPopupInfo(subject, assignment.data.srs_stage));
+      if (!token) {
+        return;
       }
-    }
-  });
 
-  const matchedVocab = getMatchingVocabularyTokens(passage.text, wkVocab);
-  const filteredVocabInfo = new Map<string, PopupWordInfo>();
-  matchedVocab.forEach((token) => {
-    const info = vocabInfo.get(token);
-    if (info) {
-      filteredVocabInfo.set(token, info);
+      wkVocab.add(token);
+      vocabInfo.set(token, toPopupInfo(subject, assignment.data.srs_stage));
     }
   });
 
   return {
-    kanji: new Set(passage.kanjiList.filter((kanji) => wkKanji.has(kanji))),
-    vocab: matchedVocab,
+    kanji: wkKanji,
+    vocab: wkVocab,
     kanjiInfo,
-    vocabInfo: filteredVocabInfo,
+    vocabInfo,
   };
 }
 
-function renderParagraphWithHighlights(
+function normalizeDictionaryForm(token: Token): string {
+  const basic = token.basic_form?.trim();
+  if (!basic || basic === '*') {
+    return token.surface_form;
+  }
+
+  return basic;
+}
+
+function classifyToken(token: Token, wkKanji: Set<string>, wkVocab: Set<string>): TokenKind {
+  const surface = token.surface_form;
+  const basic = normalizeDictionaryForm(token);
+
+  if (wkVocab.has(surface) || wkVocab.has(basic)) {
+    return 'wk-vocab';
+  }
+
+  const isComposite = surface.length > 1 && [...surface].some((ch) => isHiragana(ch));
+
+  if (!isComposite && [...surface].some((ch) => wkKanji.has(ch))) {
+    return 'wk-kanji';
+  }
+
+  if (hasJapanese(token)) {
+    return 'unknown-jp';
+  }
+
+  return 'plain';
+}
+
+function getPopupWordForToken(token: Token, sets: HighlightSets): PopupWordInfo | null {
+  const surface = token.surface_form;
+  const basic = normalizeDictionaryForm(token);
+
+  const vocabWord = sets.vocabInfo.get(surface) ?? sets.vocabInfo.get(basic);
+  if (vocabWord) {
+    return vocabWord;
+  }
+
+  const isComposite = surface.length > 1 && [...surface].some((ch) => isHiragana(ch));
+  if (!isComposite) {
+    for (const char of surface) {
+      const kanjiWord = sets.kanjiInfo.get(char);
+      if (kanjiWord) {
+        return kanjiWord;
+      }
+    }
+  }
+
+  return null;
+}
+
+function splitTokensIntoParagraphs(tokens: Token[]): Token[][] {
+  const paragraphs: Token[][] = [[]];
+
+  tokens.forEach((token) => {
+    const parts = token.surface_form.split(/(\n{2,})/);
+
+    parts.forEach((part) => {
+      if (!part) {
+        return;
+      }
+
+      if (/^\n{2,}$/.test(part)) {
+        if (paragraphs[paragraphs.length - 1].length > 0) {
+          paragraphs.push([]);
+        }
+        return;
+      }
+
+      const lineParts = part.split(/(\n)/);
+      lineParts.forEach((linePart) => {
+        if (!linePart) {
+          return;
+        }
+
+        paragraphs[paragraphs.length - 1].push({
+          ...token,
+          surface_form: linePart,
+        });
+      });
+    });
+  });
+
+  return paragraphs.filter((paragraph) => paragraph.length > 0);
+}
+
+function renderFallbackParagraph(
   paragraph: string,
   showHighlights: boolean,
   sets: HighlightSets,
   interactive: boolean,
-  onSelectWord: (word: PopupWordInfo) => void
-): Array<string | JSX.Element> {
+  studyMode: boolean,
+  onSelectWord: (word: PopupWordInfo) => void,
+  onDictionaryLookup: (word: string) => void
+): JSX.Element[] {
   if (!showHighlights) {
-    return [paragraph];
+    return splitIntoSegments(paragraph).map((segment, index) => {
+      if (studyMode && segment.isJapanese) {
+        const lookupWord = extractWordAt(segment.text, 0) || segment.text;
+        return (
+          <span
+            key={`plain-${index}`}
+            className="highlight-unknown"
+            onClick={() => onDictionaryLookup(lookupWord)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onDictionaryLookup(lookupWord);
+              }
+            }}
+          >
+            {segment.text}
+          </span>
+        );
+      }
+
+      return <span key={`plain-${index}`}>{segment.text}</span>;
+    });
   }
 
-  const nodes: Array<string | JSX.Element> = [];
-  const vocabTokens = Array.from(sets.vocab).sort((a, b) => b.length - a.length);
+  const nodes: JSX.Element[] = [];
+  const vocabTokens = Array.from(getMatchingVocabularyTokens(paragraph, sets.vocab)).sort(
+    (a, b) => b.length - a.length
+  );
 
   let index = 0;
   let keyIndex = 0;
+  let plainBuffer = '';
+
+  const flushPlainBuffer = () => {
+    if (!plainBuffer) {
+      return;
+    }
+
+    splitIntoSegments(plainBuffer).forEach((segment) => {
+      const key = `plain-${keyIndex++}`;
+
+      if (studyMode && segment.isJapanese) {
+        const lookupWord = extractWordAt(segment.text, 0) || segment.text;
+        nodes.push(
+          <span
+            key={key}
+            className="highlight-unknown"
+            onClick={() => onDictionaryLookup(lookupWord)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                onDictionaryLookup(lookupWord);
+              }
+            }}
+          >
+            {segment.text}
+          </span>
+        );
+        return;
+      }
+
+      nodes.push(<span key={key}>{segment.text}</span>);
+    });
+
+    plainBuffer = '';
+  };
 
   while (index < paragraph.length) {
     const vocabMatch = vocabTokens.find((token) => paragraph.startsWith(token, index));
     if (vocabMatch) {
+      flushPlainBuffer();
       const vocabWord = sets.vocabInfo.get(vocabMatch);
       nodes.push(
         <span
           key={`vocab-${keyIndex++}`}
-          className="highlight-vocab"
+          className={showHighlights ? 'highlight-vocab' : undefined}
           onClick={() => interactive && vocabWord && onSelectWord(vocabWord)}
           role={interactive ? 'button' : undefined}
           tabIndex={interactive ? 0 : undefined}
           onKeyDown={(event) => {
-            if (!interactive || !vocabWord) return;
+            if (!interactive || !vocabWord) {
+              return;
+            }
+
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
               onSelectWord(vocabWord);
@@ -125,16 +285,20 @@ function renderParagraphWithHighlights(
 
     const char = paragraph[index];
     if (sets.kanji.has(char)) {
+      flushPlainBuffer();
       const kanjiWord = sets.kanjiInfo.get(char);
       nodes.push(
         <span
           key={`kanji-${keyIndex++}`}
-          className="highlight-kanji"
+          className={showHighlights ? 'highlight-kanji' : undefined}
           onClick={() => interactive && kanjiWord && onSelectWord(kanjiWord)}
           role={interactive ? 'button' : undefined}
           tabIndex={interactive ? 0 : undefined}
           onKeyDown={(event) => {
-            if (!interactive || !kanjiWord) return;
+            if (!interactive || !kanjiWord) {
+              return;
+            }
+
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault();
               onSelectWord(kanjiWord);
@@ -145,12 +309,13 @@ function renderParagraphWithHighlights(
         </span>
       );
     } else {
-      nodes.push(char);
+      plainBuffer += char;
     }
 
     index += 1;
   }
 
+  flushPlainBuffer();
   return nodes;
 }
 
@@ -162,13 +327,11 @@ export function ReadingPage() {
   const [mode, setMode] = useState<ReadingMode>('study');
   const [showHighlights, setShowHighlights] = useState(true);
   const [selectedWord, setSelectedWord] = useState<PopupWordInfo | null>(null);
+  const [dictWord, setDictWord] = useState<string | null>(null);
   const [savedVocabularyTokens, setSavedVocabularyTokens] = useState<Set<string>>(new Set());
-  const [highlightSets, setHighlightSets] = useState<HighlightSets>({
-    kanji: new Set(),
-    vocab: new Set(),
-    kanjiInfo: new Map(),
-    vocabInfo: new Map(),
-  });
+  const [tokens, setTokens] = useState<Token[]>([]);
+  const [tokenizerReady, setTokenizerReady] = useState(false);
+  const [highlightSets, setHighlightSets] = useState<HighlightSets>(createEmptyHighlightSets());
 
   const passage = passages.find((p) => p.id === id);
 
@@ -176,12 +339,16 @@ export function ReadingPage() {
     let active = true;
 
     const loadHighlights = async () => {
-      if (!passage) return;
+      if (!passage) {
+        return;
+      }
 
       const wkData = await StorageService.getWaniKaniData();
-      if (!active) return;
+      if (!active) {
+        return;
+      }
 
-      setHighlightSets(buildHighlightSets(passage, wkData));
+      setHighlightSets(buildHighlightSets(wkData));
       const saved = StorageService.getSavedVocabulary();
       setSavedVocabularyTokens(new Set(saved.map((item) => item.token)));
     };
@@ -192,6 +359,43 @@ export function ReadingPage() {
       active = false;
     };
   }, [passage]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!passage) {
+      return () => {
+        active = false;
+      };
+    }
+
+    setTokenizerReady(false);
+    setTokens([]);
+
+    getTokenizer()
+      .then((tokenizer) => {
+        if (!active) {
+          return;
+        }
+
+        const merged = mergeTokens(tokenize(passage.text, tokenizer));
+        setTokens(merged);
+        setTokenizerReady(true);
+      })
+      .catch((error) => {
+        console.warn('kuromoji failed to load:', error);
+        if (!active) {
+          return;
+        }
+
+        setTokenizerReady(false);
+        setTokens([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [passage?.id]);
 
   useEffect(() => {
     if (!passage) {
@@ -242,13 +446,38 @@ export function ReadingPage() {
     setSavedVocabularyTokens((prev) => new Set(prev).add(word.token));
   };
 
+  const handleWaniKaniTap = (word: PopupWordInfo) => {
+    setDictWord(null);
+    setSelectedWord((current) => (current?.token === word.token ? null : word));
+  };
+
+  const handleDictionaryTap = (token: Token) => {
+    const lookupWord = normalizeDictionaryForm(token);
+    if (!lookupWord) {
+      return;
+    }
+
+    setSelectedWord(null);
+    setDictWord(lookupWord);
+  };
+
+  const handleDictionaryWordTap = (lookupWord: string) => {
+    if (!lookupWord) {
+      return;
+    }
+
+    setSelectedWord(null);
+    setDictWord(lookupWord);
+  };
+
   const minutes = Math.floor(timeElapsed / 60);
   const seconds = timeElapsed % 60;
   const estimatedSeconds = passage.estimatedMinutes * 60;
   const paceRatio = estimatedSeconds > 0 ? timeElapsed / estimatedSeconds : 0;
 
   const isStudyMode = mode === 'study';
-  const canInteractHighlights = isStudyMode && showHighlights;
+  const canInteractHighlights = isStudyMode;
+  const tokenParagraphs = tokenizerReady ? splitTokensIntoParagraphs(tokens) : [];
 
   const getPace = (ratio: number): { label: string; color: string } => {
     if (ratio < 0.8) return { label: 'Ahead of pace', color: 'text-success-500' };
@@ -258,21 +487,20 @@ export function ReadingPage() {
 
   return (
     <div className="space-y-5">
-      {/* Header with Timer */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <button
             onClick={handleBack}
             className="text-primary-400 hover:text-primary-500 font-medium"
           >
-            ← Back
+            竊・Back
           </button>
           <div className="flex items-center gap-2">
             <button
               onClick={startTimer}
               className="btn btn-secondary text-sm px-3 py-2"
             >
-              {session.isTimerRunning ? '⏸' : '⏱'} Timer
+              {session.isTimerRunning ? '竢ｸ' : '竢ｱ'} Timer
             </button>
             {session.isTimerRunning && (
               <div className="text-lg font-mono font-semibold text-primary-400">
@@ -289,6 +517,7 @@ export function ReadingPage() {
                 setMode('reading');
                 setShowHighlights(false);
                 setSelectedWord(null);
+                setDictWord(null);
               }}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 mode === 'reading' ? 'bg-surface text-prose shadow-xs' : 'text-prose-secondary'
@@ -326,9 +555,13 @@ export function ReadingPage() {
         </div>
       )}
 
-      {/* Passage Content */}
+      {isStudyMode && tokenizerReady && (
+        <p className="text-center text-xs text-prose-muted">
+          Tap any Japanese word to look it up · <span className="text-violet-500">violet = unknown</span>
+        </p>
+      )}
+
       <div className="card">
-        {/* Title and Meta */}
         <div className="mb-6">
           <span className="badge badge-primary mb-3 inline-flex">
             {passage.theme}
@@ -357,24 +590,108 @@ export function ReadingPage() {
           </div>
         )}
 
-        {/* Japanese Text */}
         <div className="mb-6 rounded-lg border border-stroke-subtle bg-muted p-6">
           <div className="japanese-text text-prose leading-loose">
-            {passage.text.split('\n\n').map((paragraph, idx) => (
-              <p key={idx} className="mb-6">
-                {renderParagraphWithHighlights(
-                  paragraph,
-                  showHighlights,
-                  highlightSets,
-                  canInteractHighlights,
-                  setSelectedWord
-                )}
-              </p>
-            ))}
+            {tokenizerReady
+              ? tokenParagraphs.map((paragraphTokens, paragraphIndex) => (
+                  <p key={paragraphIndex} className="mb-6">
+                    {paragraphTokens.map((token, tokenIndex) => {
+                      if (token.surface_form === '\n') {
+                        return <br key={`br-${paragraphIndex}-${tokenIndex}`} />;
+                      }
+
+                      const type = classifyToken(token, highlightSets.kanji, highlightSets.vocab);
+                      const popupWord = getPopupWordForToken(token, highlightSets);
+                      const baseInteractiveProps = {
+                        role: 'button' as const,
+                        tabIndex: 0,
+                        onKeyDown: (event: React.KeyboardEvent<HTMLSpanElement>) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+
+                            if (type === 'unknown-jp') {
+                              handleDictionaryTap(token);
+                              return;
+                            }
+
+                            if (popupWord) {
+                              handleWaniKaniTap(popupWord);
+                            }
+                          }
+                        },
+                      };
+
+                      if (type === 'wk-vocab' && popupWord) {
+                        return (
+                          <span
+                            key={`${paragraphIndex}-${tokenIndex}`}
+                            className={
+                              showHighlights
+                                ? 'highlight-vocab'
+                                : canInteractHighlights
+                                  ? 'cursor-pointer rounded-sm px-0.5'
+                                  : undefined
+                            }
+                            onClick={() => canInteractHighlights && handleWaniKaniTap(popupWord)}
+                            {...(canInteractHighlights ? baseInteractiveProps : {})}
+                          >
+                            {token.surface_form}
+                          </span>
+                        );
+                      }
+
+                      if (type === 'wk-kanji' && popupWord) {
+                        return (
+                          <span
+                            key={`${paragraphIndex}-${tokenIndex}`}
+                            className={
+                              showHighlights
+                                ? 'highlight-kanji'
+                                : canInteractHighlights
+                                  ? 'cursor-pointer rounded-sm px-0.5'
+                                  : undefined
+                            }
+                            onClick={() => canInteractHighlights && handleWaniKaniTap(popupWord)}
+                            {...(canInteractHighlights ? baseInteractiveProps : {})}
+                          >
+                            {token.surface_form}
+                          </span>
+                        );
+                      }
+
+                      if (type === 'unknown-jp' && isStudyMode) {
+                        return (
+                          <span
+                            key={`${paragraphIndex}-${tokenIndex}`}
+                            className="highlight-unknown"
+                            onClick={() => handleDictionaryTap(token)}
+                            {...baseInteractiveProps}
+                          >
+                            {token.surface_form}
+                          </span>
+                        );
+                      }
+
+                      return <span key={`${paragraphIndex}-${tokenIndex}`}>{token.surface_form}</span>;
+                    })}
+                  </p>
+                ))
+              : passage.text.split('\n\n').map((paragraph, idx) => (
+                  <p key={idx} className="mb-6">
+                    {renderFallbackParagraph(
+                      paragraph,
+                      showHighlights,
+                      highlightSets,
+                      canInteractHighlights,
+                      isStudyMode,
+                      handleWaniKaniTap,
+                      handleDictionaryWordTap
+                    )}
+                  </p>
+                ))}
           </div>
         </div>
 
-        {/* Reading Stats */}
         <div className="border-t border-stroke-subtle pt-6 flex justify-between items-center">
           <div className="text-sm text-prose-secondary">
             <p>
@@ -389,17 +706,15 @@ export function ReadingPage() {
         </div>
       </div>
 
-      {/* Action Button */}
       <button
         onClick={handleStartQuestions}
         className="btn btn-primary w-full"
       >
-        Continue to Questions →
+        Continue to Questions 竊・
       </button>
 
-      {/* Help Text */}
       <p className="text-center text-sm text-prose-secondary">
-        Use Study mode to tap highlighted words and view WaniKani details.
+        Study mode uses WaniKani highlights plus tap-to-look-up tokens.
       </p>
 
       <WordPopup
@@ -408,6 +723,15 @@ export function ReadingPage() {
         onSaveWord={handleSaveWord}
         isSaved={selectedWord ? savedVocabularyTokens.has(selectedWord.token) : false}
       />
+
+      {dictWord && (
+        <DictPopup
+          word={dictWord}
+          textId={passage.id}
+          textTitle={passage.title}
+          onClose={() => setDictWord(null)}
+        />
+      )}
     </div>
   );
 }

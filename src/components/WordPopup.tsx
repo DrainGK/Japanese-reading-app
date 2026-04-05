@@ -1,4 +1,5 @@
 type PopupItemType = 'kanji' | 'vocab';
+type PopupSource = 'wk' | 'jisho';
 
 export type PopupWordInfo = {
   token: string;
@@ -7,6 +8,9 @@ export type PopupWordInfo = {
   readings: string[];
   level?: number;
   srsStage?: number;
+  source?: PopupSource;
+  jlpt?: string | null;
+  isCommon?: boolean;
 };
 
 type WordPopupProps = {
@@ -29,6 +33,8 @@ function getSrsStageLabel(stage?: number): string {
 export function WordPopup({ word, onClose, onSaveWord, isSaved = false }: WordPopupProps) {
   if (!word) return null;
 
+  const source = word.source ?? 'wk';
+
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-prose/30 p-4" onClick={onClose}>
       <div
@@ -38,7 +44,9 @@ export function WordPopup({ word, onClose, onSaveWord, isSaved = false }: WordPo
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <p className="text-2xl font-semibold text-prose font-jp">{word.token}</p>
-            <p className="text-xs text-prose-secondary mt-1 capitalize">{word.type}</p>
+            <p className="text-xs text-prose-secondary mt-1 capitalize">
+              {word.type} {source === 'jisho' ? '• Jisho' : '• WaniKani'}
+            </p>
           </div>
           <button
             onClick={onClose}
@@ -69,7 +77,11 @@ export function WordPopup({ word, onClose, onSaveWord, isSaved = false }: WordPo
           {typeof word.level === 'number' && (
             <span className="badge badge-primary">WK level {word.level}</span>
           )}
-          <span className="badge bg-muted text-prose-secondary">{getSrsStageLabel(word.srsStage)}</span>
+          {typeof word.srsStage === 'number' && (
+            <span className="badge bg-muted text-prose-secondary">{getSrsStageLabel(word.srsStage)}</span>
+          )}
+          {word.jlpt && <span className="badge badge-primary">{word.jlpt}</span>}
+          {word.isCommon && <span className="badge badge-success">Common</span>}
         </div>
 
         {word.type === 'vocab' && onSaveWord && (

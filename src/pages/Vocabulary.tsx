@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StorageService } from '../services/storage';
 import { Pagination } from '../components/Pagination';
-import { SavedVocabularyItem } from '../types';
+import { StorageService } from '../services/storage';
+import { DictionaryWord, SavedVocabularyItem } from '../types';
 
 const PAGE_SIZE = 12;
+
+type VocabularyTab = 'saved' | 'unlocked' | 'dictionary';
 
 interface UnlockedVocabularyItem {
   id: number;
@@ -25,13 +27,18 @@ function downloadTextFile(filename: string, content: string): void {
 }
 
 export function VocabularyPage() {
+  const [tab, setTab] = useState<VocabularyTab>('saved');
+  const [page, setPage] = useState(1);
   const [savedItems, setSavedItems] = useState<SavedVocabularyItem[]>([]);
   const [unlockedItems, setUnlockedItems] = useState<UnlockedVocabularyItem[]>([]);
-  const [tab, setTab] = useState<'saved' | 'unlocked'>('saved');
-  const [page, setPage] = useState(1);
+  const [dictionaryItems, setDictionaryItems] = useState<DictionaryWord[]>([]);
 
   const reloadSavedVocabulary = () => {
     setSavedItems(StorageService.getSavedVocabulary());
+  };
+
+  const reloadDictionaryWords = () => {
+    setDictionaryItems(StorageService.getDictionaryWords());
   };
 
   const loadUnlockedVocabulary = async () => {
@@ -41,7 +48,10 @@ export function VocabularyPage() {
       return;
     }
 
-    const assignmentMap = new Map(wkData.assignments.map((a) => [a.data.subject_id, a.data.srs_stage]));
+    const assignmentMap = new Map(
+      wkData.assignments.map((assignment) => [assignment.data.subject_id, assignment.data.srs_stage])
+    );
+
     const unlockedList = wkData.vocabularySubjects
       .filter((subject) => {
         const srsStage = assignmentMap.get(subject.id);
@@ -50,8 +60,8 @@ export function VocabularyPage() {
       .map((subject) => ({
         id: subject.id,
         token: subject.data.characters || subject.data.slug,
-        meanings: subject.data.meanings.map((m) => m.meaning),
-        readings: subject.data.readings?.map((r) => r.reading) || [],
+        meanings: subject.data.meanings.map((item) => item.meaning),
+        readings: subject.data.readings?.map((item) => item.reading) || [],
         level: subject.data.level || 0,
         srsStage: assignmentMap.get(subject.id) || 0,
       }))
@@ -62,21 +72,17 @@ export function VocabularyPage() {
 
   useEffect(() => {
     reloadSavedVocabulary();
-    loadUnlockedVocabulary();
+    reloadDictionaryWords();
+    void loadUnlockedVocabulary();
   }, []);
 
-  const levelsCount = useMemo(() => {
-    return new Set(savedItems.map((item) => item.level).filter((level): level is number => typeof level === 'number')).size;
-  }, [savedItems]);
-
-  const displayItems = tab === 'saved' ? savedItems : unlockedItems;
-  const totalPages = Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE));
-  const pageRows = displayItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  // Reset page when switching tabs
   useEffect(() => {
     setPage(1);
   }, [tab]);
+
+  const totalCount =
+    tab === 'saved' ? savedItems.length : tab === 'unlocked' ? unlockedItems.length : dictionaryItems.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   useEffect(() => {
     if (page > totalPages) {
@@ -84,163 +90,308 @@ export function VocabularyPage() {
     }
   }, [page, totalPages]);
 
-  const handleRemove = (token: string) => {
+  const handleRemoveSaved = (token: string) => {
     StorageService.removeSavedVocabulary(token);
     reloadSavedVocabulary();
   };
 
-  const handleExportAnki = () => {
+  const handleRemoveDictionary = (id: string) => {
+    StorageService.removeDictionaryWord(id);
+    reloadDictionaryWords();
+  };
+
+  const handleExportSavedAnki = () => {
     const tsv = StorageService.exportSavedVocabularyAsAnkiTsv();
     const today = new Date().toISOString().split('T')[0];
     downloadTextFile(`n2-reader-vocab-${today}.tsv`, tsv);
   };
 
+  const handleExportDictionaryAnki = () => {
+    const tsv = StorageService.exportDictionaryWordsAsAnkiTsv();
+    const today = new Date().toISOString().split('T')[0];
+    downloadTextFile(`n2-reader-dictionary-${today}.tsv`, tsv);
+  };
+
+  const savedLevelsCount = useMemo(() => {
+    return new Set(
+      savedItems
+        .map((item) => item.level)
+        .filter((level): level is number => typeof level === 'number')
+    ).size;
+  }, [savedItems]);
+
+  const unlockedLevelsCount = useMemo(() => {
+    return new Set(unlockedItems.map((item) => item.level)).size;
+  }, [unlockedItems]);
+
+  const dictionaryLevelsCount = useMemo(() => {
+    return new Set(dictionaryItems.map((item) => item.jlpt).filter(Boolean)).size;
+  }, [dictionaryItems]);
+
+  const savedRows = savedItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const unlockedRows = unlockedItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const dictionaryRows = dictionaryItems.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   return (
     <div className="space-y-6">
-      {/* Tab Headers */}
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <div className="flex gap-2 border-b border-stroke-subtle">
+          <div className="flex gap-3 overflow-x-auto border-b border-stroke-subtle pb-1">
             <button
               onClick={() => setTab('saved')}
-              className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${
+              className={`shrink-0 pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${
                 tab === 'saved'
                   ? 'border-primary-400 text-prose'
                   : 'border-transparent text-prose-secondary hover:text-prose'
               }`}
             >
-              Saved Vocabulary
+              WaniKani Vocab
             </button>
             <button
               onClick={() => setTab('unlocked')}
-              className={`pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${
+              className={`shrink-0 pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${
                 tab === 'unlocked'
                   ? 'border-primary-400 text-prose'
                   : 'border-transparent text-prose-secondary hover:text-prose'
               }`}
             >
-              Unlocked Vocabulary
+              Unlocked WaniKani Vocab
+            </button>
+            <button
+              onClick={() => setTab('dictionary')}
+              className={`shrink-0 pb-3 px-1 font-medium text-sm border-b-2 transition-colors ${
+                tab === 'dictionary'
+                  ? 'border-primary-400 text-prose'
+                  : 'border-transparent text-prose-secondary hover:text-prose'
+              }`}
+            >
+              Dictionary {dictionaryItems.length > 0 ? `(${dictionaryItems.length})` : ''}
             </button>
           </div>
+
           {tab === 'saved' && (
-            <p className="text-sm text-prose-secondary mt-2">
-              Words saved from reading mode, ready for review or Anki export.
+            <p className="mt-2 text-sm text-prose-secondary">
+              WaniKani vocabulary saved from reading mode, ready for review or Anki export.
             </p>
           )}
           {tab === 'unlocked' && (
-            <p className="text-sm text-prose-secondary mt-2">
+            <p className="mt-2 text-sm text-prose-secondary">
               Vocabulary unlocked in WaniKani. Sorted by level (highest first).
+            </p>
+          )}
+          {tab === 'dictionary' && (
+            <p className="mt-2 text-sm text-prose-secondary">
+              Words looked up from the in-reader dictionary and saved for later review.
             </p>
           )}
         </div>
 
         {tab === 'saved' && (
           <button
-            onClick={handleExportAnki}
+            onClick={handleExportSavedAnki}
             disabled={savedItems.length === 0}
-            className="btn btn-secondary px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn btn-secondary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
           >
             Export Anki TSV
           </button>
         )}
+
+        {tab === 'dictionary' && (
+          <button
+            onClick={handleExportDictionaryAnki}
+            disabled={dictionaryItems.length === 0}
+            className="btn btn-secondary px-4 py-2 text-sm disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Export Dictionary TSV
+          </button>
+        )}
       </div>
 
-      {/* Stats Grid */}
       <div className="grid grid-cols-3 gap-3">
-        {tab === 'saved' ? (
+        {tab === 'saved' && (
           <>
             <div className="card text-center">
               <p className="text-2xl font-semibold text-primary-400">{savedItems.length}</p>
-              <p className="text-xs text-prose-secondary mt-1">Saved Words</p>
+              <p className="mt-1 text-xs text-prose-secondary">Saved Words</p>
             </div>
             <div className="card text-center">
-              <p className="text-2xl font-semibold text-success-500">{levelsCount}</p>
-              <p className="text-xs text-prose-secondary mt-1">WK Levels</p>
+              <p className="text-2xl font-semibold text-success-500">{savedLevelsCount}</p>
+              <p className="mt-1 text-xs text-prose-secondary">WK Levels</p>
             </div>
             <div className="card text-center">
               <p className="text-2xl font-semibold text-warning-500">
                 {savedItems.filter((item) => item.srsStage && item.srsStage >= 5).length}
               </p>
-              <p className="text-xs text-prose-secondary mt-1">Guru+ Items</p>
+              <p className="mt-1 text-xs text-prose-secondary">Guru+ Items</p>
             </div>
           </>
-        ) : (
+        )}
+
+        {tab === 'unlocked' && (
           <>
             <div className="card text-center">
               <p className="text-2xl font-semibold text-primary-400">{unlockedItems.length}</p>
-              <p className="text-xs text-prose-secondary mt-1">Unlocked Words</p>
+              <p className="mt-1 text-xs text-prose-secondary">Unlocked Words</p>
             </div>
             <div className="card text-center">
-              <p className="text-2xl font-semibold text-success-500">
-                {new Set(unlockedItems.map((item) => item.level)).size}
-              </p>
-              <p className="text-xs text-prose-secondary mt-1">WK Levels</p>
+              <p className="text-2xl font-semibold text-success-500">{unlockedLevelsCount}</p>
+              <p className="mt-1 text-xs text-prose-secondary">WK Levels</p>
             </div>
             <div className="card text-center">
               <p className="text-2xl font-semibold text-warning-500">
                 {unlockedItems.filter((item) => item.srsStage >= 5).length}
               </p>
-              <p className="text-xs text-prose-secondary mt-1">Guru+ Items</p>
+              <p className="mt-1 text-xs text-prose-secondary">Guru+ Items</p>
+            </div>
+          </>
+        )}
+
+        {tab === 'dictionary' && (
+          <>
+            <div className="card text-center">
+              <p className="text-2xl font-semibold text-primary-400">{dictionaryItems.length}</p>
+              <p className="mt-1 text-xs text-prose-secondary">Saved Lookups</p>
+            </div>
+            <div className="card text-center">
+              <p className="text-2xl font-semibold text-success-500">{dictionaryLevelsCount}</p>
+              <p className="mt-1 text-xs text-prose-secondary">JLPT Bands</p>
+            </div>
+            <div className="card text-center">
+              <p className="text-2xl font-semibold text-warning-500">
+                {dictionaryItems.filter((item) => item.isCommon).length}
+              </p>
+              <p className="mt-1 text-xs text-prose-secondary">Common Words</p>
             </div>
           </>
         )}
       </div>
 
-      {displayItems.length === 0 ? (
-        <div className="card text-sm text-prose-secondary">
-          {tab === 'saved'
-            ? 'No saved vocabulary yet. Open a reading passage, switch to Study mode, and save highlighted vocabulary from the popup.'
-            : 'No unlocked vocabulary found. Connect your WaniKani account and unlock vocabulary items to see them here.'}
-        </div>
-      ) : (
-        <div className="card overflow-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-stroke-subtle bg-muted text-left text-prose-secondary">
-                <th className="px-3 py-2">Word</th>
-                <th className="px-3 py-2">Meaning</th>
-                <th className="px-3 py-2">Reading</th>
-                <th className="px-3 py-2">WK</th>
-                {tab === 'saved' && <th className="px-3 py-2">Action</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {pageRows.map((row) => (
-                <tr key={tab === 'saved' ? row.id : (row as UnlockedVocabularyItem).id} className="border-b border-stroke-subtle last:border-b-0">
-                  <td className="px-3 py-2 text-base font-jp text-prose">
-                    {tab === 'saved' ? (row as SavedVocabularyItem).token : (row as UnlockedVocabularyItem).token}
-                  </td>
-                  <td className="px-3 py-2 text-prose">
-                    {tab === 'saved'
-                      ? (row as SavedVocabularyItem).meaning
-                      : (row as UnlockedVocabularyItem).meanings.join(', ')}
-                  </td>
-                  <td className="px-3 py-2 text-prose-secondary">
-                    {tab === 'saved'
-                      ? (row as SavedVocabularyItem).readings.join(' / ') || '-'
-                      : (row as UnlockedVocabularyItem).readings.join(' / ') || '-'}
-                  </td>
-                  <td className="px-3 py-2 text-prose-secondary">
-                    L{tab === 'saved' ? (row as SavedVocabularyItem).level ?? '-' : (row as UnlockedVocabularyItem).level} · SRS{' '}
-                    {tab === 'saved' ? (row as SavedVocabularyItem).srsStage ?? '-' : (row as UnlockedVocabularyItem).srsStage}
-                  </td>
-                  {tab === 'saved' && (
-                    <td className="px-3 py-2">
-                      <button
-                        onClick={() => handleRemove((row as SavedVocabularyItem).token)}
-                        className="text-xs rounded-md bg-danger-50 px-2.5 py-1 text-danger-600 hover:bg-danger-100"
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {tab === 'saved' && (
+        <>
+          {savedItems.length === 0 ? (
+            <div className="card text-sm text-prose-secondary">
+              No saved vocabulary yet. Open a reading passage, switch to Study mode, and save highlighted vocabulary from the popup.
+            </div>
+          ) : (
+            <div className="card overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-stroke-subtle bg-muted text-left text-prose-secondary">
+                    <th className="px-3 py-2">Word</th>
+                    <th className="px-3 py-2">Meaning</th>
+                    <th className="px-3 py-2">Reading</th>
+                    <th className="px-3 py-2">Source</th>
+                    <th className="px-3 py-2">WK</th>
+                    <th className="px-3 py-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedRows.map((row) => (
+                    <tr key={row.id} className="border-b border-stroke-subtle last:border-b-0">
+                      <td className="px-3 py-2 text-base font-jp text-prose">{row.token}</td>
+                      <td className="px-3 py-2 text-prose">{row.meaning}</td>
+                      <td className="px-3 py-2 text-prose-secondary">{row.readings.join(' / ') || '-'}</td>
+                      <td className="px-3 py-2 text-prose-secondary uppercase">
+                        {row.source === 'jisho' ? 'JISHO' : 'WK'}
+                      </td>
+                      <td className="px-3 py-2 text-prose-secondary">
+                        L{row.level ?? '-'} · SRS {row.srsStage ?? '-'}
+                      </td>
+                      <td className="px-3 py-2">
+                        <button
+                          onClick={() => handleRemoveSaved(row.token)}
+                          className="rounded-md bg-danger-50 px-2.5 py-1 text-xs text-danger-600 hover:bg-danger-100"
+                        >
+                          Remove
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
 
-          <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
-        </div>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'unlocked' && (
+        <>
+          {unlockedItems.length === 0 ? (
+            <div className="card text-sm text-prose-secondary">
+              No unlocked vocabulary found. Connect your WaniKani account and unlock vocabulary items to see them here.
+            </div>
+          ) : (
+            <div className="card overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-stroke-subtle bg-muted text-left text-prose-secondary">
+                    <th className="px-3 py-2">Word</th>
+                    <th className="px-3 py-2">Meaning</th>
+                    <th className="px-3 py-2">Reading</th>
+                    <th className="px-3 py-2">WK</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unlockedRows.map((row) => (
+                    <tr key={row.id} className="border-b border-stroke-subtle last:border-b-0">
+                      <td className="px-3 py-2 text-base font-jp text-prose">{row.token}</td>
+                      <td className="px-3 py-2 text-prose">{row.meanings.join(', ')}</td>
+                      <td className="px-3 py-2 text-prose-secondary">{row.readings.join(' / ') || '-'}</td>
+                      <td className="px-3 py-2 text-prose-secondary">L{row.level} · SRS {row.srsStage}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === 'dictionary' && (
+        <>
+          {dictionaryItems.length === 0 ? (
+            <div className="card text-sm text-prose-secondary">
+              No dictionary words saved yet. In Study mode, tap any Japanese word to look it up and save it.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {dictionaryRows.map((word) => (
+                <div key={word.id} className="card flex items-start gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="font-jp text-xl font-medium text-prose">{word.word}</span>
+                      {word.reading !== word.word && (
+                        <span className="font-jp text-sm text-prose-secondary">{word.reading}</span>
+                      )}
+                    </div>
+
+                    <p className="mt-1 text-sm text-prose">{word.meanings.slice(0, 2).join(', ')}</p>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      {word.jlpt && <span className="badge badge-primary">{word.jlpt}</span>}
+                      {word.isCommon && <span className="badge badge-success">Common</span>}
+                      <span className="truncate text-xs text-prose-muted">· {word.sourceTextTitle}</span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => handleRemoveDictionary(word.id)}
+                    className="shrink-0 rounded-lg p-1 text-prose-muted transition-colors hover:bg-danger-50 hover:text-danger-500"
+                    aria-label="Remove dictionary word"
+                  >
+                    x
+                  </button>
+                </div>
+              ))}
+
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

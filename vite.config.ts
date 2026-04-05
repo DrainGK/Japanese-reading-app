@@ -7,5 +7,12 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
+    proxy: {
+      '/api/jisho/search': {
+        target: 'https://jisho.org',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/jisho\/search/, '/api/v1/search/words'),
+      },
+    },
   }
 })

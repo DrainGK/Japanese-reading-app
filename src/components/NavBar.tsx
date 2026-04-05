@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 
 const navItems = [
   { to: '/', label: 'Home', icon: '🏠' },
@@ -9,8 +9,6 @@ const navItems = [
 ];
 
 export function NavBar() {
-  const location = useLocation();
-
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-surface/90 backdrop-blur-sm
                     border-t border-stroke-subtle z-50 safe-area-pb md:static md:border-t-0 md:border-b">
@@ -19,11 +17,14 @@ export function NavBar() {
           <NavLink
             key={item.to}
             to={item.to}
-            className={`flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-lg
-                        transition-all duration-150
-                        ${location.pathname === item.to
-                          ? 'text-primary-400'
-                          : 'text-prose-muted hover:text-prose-secondary'}`}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-1 px-3 py-1.5 rounded-lg
+               transition-all duration-150 ${
+                 isActive
+                   ? 'text-primary-400'
+                   : 'text-prose-muted hover:text-prose-secondary'
+               }`
+            }
             end={item.to === '/'}
           >
             <span className="text-xl">{item.icon}</span>

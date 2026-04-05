@@ -4,6 +4,7 @@ import {
   SessionStats,
   WaniKaniSubject,
   SavedVocabularyItem,
+  DictionaryWord,
   UserPreferences,
 } from '../types';
 
@@ -14,6 +15,7 @@ const STORAGE_KEYS = {
   CURRENT_SESSION: 'current_session',
   LAST_SESSION_DATE: 'last_session_date',
   SAVED_VOCABULARY: 'saved_vocabulary',
+  DICTIONARY_WORDS: 'dictionary_words',
   USER_PREFERENCES: 'user_preferences',
 };
 
@@ -354,6 +356,55 @@ export class StorageService {
       const level = typeof item.level === 'number' ? String(item.level) : '';
       const srs = typeof item.srsStage === 'number' ? String(item.srsStage) : '';
       return `${front}\t${back}\t${reading}\t${level}\t${srs}`;
+    });
+
+    return [header, ...rows].join('\n');
+  }
+
+  static getDictionaryWords(): DictionaryWord[] {
+    const stored = localStorage.getItem(STORAGE_KEYS.DICTIONARY_WORDS);
+    if (!stored) return [];
+
+    try {
+      const parsed = JSON.parse(stored) as DictionaryWord[];
+      return parsed.sort((a, b) => b.savedAt - a.savedAt);
+    } catch {
+      return [];
+    }
+  }
+
+  static saveDictionaryWord(word: DictionaryWord): DictionaryWord {
+    const existing = this.getDictionaryWords();
+    const duplicate = existing.find((item) => item.id === word.id);
+    if (duplicate) {
+      return duplicate;
+    }
+
+    const next = [word, ...existing];
+    localStorage.setItem(STORAGE_KEYS.DICTIONARY_WORDS, JSON.stringify(next));
+    return word;
+  }
+
+  static removeDictionaryWord(id: string): void {
+    const existing = this.getDictionaryWords();
+    const next = existing.filter((item) => item.id !== id);
+    localStorage.setItem(STORAGE_KEYS.DICTIONARY_WORDS, JSON.stringify(next));
+  }
+
+  static isDictionaryWordSaved(id: string): boolean {
+    return this.getDictionaryWords().some((item) => item.id === id);
+  }
+
+  static exportDictionaryWordsAsAnkiTsv(): string {
+    const words = this.getDictionaryWords();
+    const header = 'Word\tReading\tMeaning\tJLPT\tSource';
+    const rows = words.map((item) => {
+      const word = item.word.replace(/\t/g, ' ');
+      const reading = item.reading.replace(/\t/g, ' ');
+      const meaning = item.meanings.slice(0, 2).join('; ').replace(/\t/g, ' ');
+      const jlpt = (item.jlpt ?? '').replace(/\t/g, ' ');
+      const source = item.sourceTextTitle.replace(/\t/g, ' ');
+      return `${word}\t${reading}\t${meaning}\t${jlpt}\t${source}`;
     });
 
     return [header, ...rows].join('\n');

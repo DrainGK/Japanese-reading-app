@@ -156,6 +156,10 @@
   .highlight-vocab {
     @apply bg-vocab-bg text-prose rounded px-0.5 border-b-2 border-vocab-text cursor-pointer transition-colors duration-100 hover:bg-vocab-text/15;
   }
+
+  .highlight-unknown {
+    @apply cursor-pointer rounded px-0.5 border-b-2 border-violet-300 text-prose transition-colors duration-100 hover:bg-violet-50 hover:text-violet-700 active:bg-violet-100;
+  }
 }
 
 /* ===== MOBILE SAFE AREA ===== */
